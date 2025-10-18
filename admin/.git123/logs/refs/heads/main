@@ -1,0 +1,18 @@
+0000000000000000000000000000000000000000 be30a4d3faed60769f064567b4e6f65972c406ad Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1758729700 +0100	commit (initial): Initial commit from Create Next App
+be30a4d3faed60769f064567b4e6f65972c406ad 01264e659a18d2f292d6d56d39c4baec9ee141ac Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1758730467 +0100	commit: first commit
+01264e659a18d2f292d6d56d39c4baec9ee141ac 01264e659a18d2f292d6d56d39c4baec9ee141ac Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1758730467 +0100	Branch: renamed refs/heads/main to refs/heads/main
+01264e659a18d2f292d6d56d39c4baec9ee141ac b7afc7b360f83d5215b107d62d13db8ebfc8a593 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1758734542 +0100	commit: made basic layout, sign in form and init next-auth
+b7afc7b360f83d5215b107d62d13db8ebfc8a593 a5d25e950b08f2aabd7dff463435e01cb0a2e0ac Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1758817925 +0100	commit: clients page initial setup + prisma
+a5d25e950b08f2aabd7dff463435e01cb0a2e0ac 5f03714484548321108af0d6355b8b2213a29c89 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760611518 +0100	commit: MVP finished
+5f03714484548321108af0d6355b8b2213a29c89 7fa323f68793acd092478d65b11fd59720080d67 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760613933 +0100	commit: fixed errors in build
+7fa323f68793acd092478d65b11fd59720080d67 3e42e2d09351f1111605fccdb2a2bfaf10747c34 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760622589 +0100	commit: fixed all build issues
+3e42e2d09351f1111605fccdb2a2bfaf10747c34 cb36ea033d4cf61ab736a66e5ed0f7c19b945dc1 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760623231 +0100	commit: removed cron jobs from Vercel
+cb36ea033d4cf61ab736a66e5ed0f7c19b945dc1 f887d1ce9eedd5fab26b1288ae79e6f6099d5860 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760624861 +0100	commit: fix prod auth
+f887d1ce9eedd5fab26b1288ae79e6f6099d5860 03cac0cc1be5db319a5143ee758e09ff6f4b008c Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760627425 +0100	commit: add log middleware
+03cac0cc1be5db319a5143ee758e09ff6f4b008c c566a7470a3762597a58c9c737696832a042b8c1 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760628066 +0100	commit: changed NEXTAUTH_URL
+c566a7470a3762597a58c9c737696832a042b8c1 ff1b2534208123e1c3a8a3f2dff299311b038660 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760630798 +0100	commit: enabled debug
+ff1b2534208123e1c3a8a3f2dff299311b038660 bea3758fea258431e140b6c4c6730021f0e527b6 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760631304 +0100	commit: tried to fix middlware in prod
+bea3758fea258431e140b6c4c6730021f0e527b6 887f4432ba440f6e25535df62a25e1a7da203dd0 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760632749 +0100	commit: allow access to cron jobs
+887f4432ba440f6e25535df62a25e1a7da203dd0 fc6c7373f4ad4f4d649ceca4ffdbbd7d86e915ce Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760633462 +0100	commit: fixed cron permission
+fc6c7373f4ad4f4d649ceca4ffdbbd7d86e915ce 88f791ca44d73dc4a1442ad337e96ffca9b30cdc Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760792009 +0100	commit: added availability page and to db
+88f791ca44d73dc4a1442ad337e96ffca9b30cdc c7c080b50a53d59352a7bded06f40b4a7a377f55 Mohamed Sefyani Lakrizi <mohamedsefyani@gmail.com> 1760793220 +0100	commit: fixed compile errors
