@@ -27,6 +27,7 @@ export async function getAppointments(): Promise<IEvent[]> {
       include: {
         client: true,
         notes: true,
+        invoice: true,
       },
       orderBy: {
         startTime: "asc",
@@ -48,7 +49,7 @@ export async function getAppointments(): Promise<IEvent[]> {
       },
       clientId: appointment.clientId,
       rate: Number(appointment.rate),
-      paid: !!appointment.paid,
+      paid: appointment.invoice?.status === "PAID" || false,
       format: appointment.format,
       status: appointment.status,
       isCompleted: appointment.isCompleted,
@@ -81,6 +82,7 @@ export async function updateAppointmentStatus(
       include: {
         client: true,
         notes: true,
+        invoice: true, // Include invoice to get payment status
       },
     });
 
@@ -99,7 +101,7 @@ export async function updateAppointmentStatus(
       },
       clientId: appointment.clientId,
       rate: Number(appointment.rate),
-      paid: !!appointment.paid,
+      paid: appointment.invoice?.status === "PAID" || false, // Check invoice status
       format: appointment.format,
       status: appointment.status,
       isCompleted: appointment.isCompleted,
@@ -566,7 +568,7 @@ export async function updateAppointment(
         prisma as any
       ).appointment.findUnique({
         where: { id },
-        include: { client: true, notes: true },
+        include: { client: true, notes: true, invoice: true },
       });
 
       if (!originalAppointment) {
@@ -662,7 +664,7 @@ export async function updateAppointment(
         const updatedAppointment = await (prisma as any).appointment.findUnique(
           {
             where: { id },
-            include: { client: true, notes: true },
+            include: { client: true, notes: true, invoice: true },
           }
         );
 
@@ -681,7 +683,7 @@ export async function updateAppointment(
           },
           clientId: updatedAppointment.clientId,
           rate: 0, // Rate is now stored in invoice table
-          paid: false, // Payment status is now stored in invoice table
+          paid: updatedAppointment.invoice?.status === "PAID" || false, // Check invoice status
           format: updatedAppointment.format,
           status: updatedAppointment.status,
           isCompleted: updatedAppointment.isCompleted,
@@ -703,6 +705,7 @@ export async function updateAppointment(
       include: {
         client: true,
         notes: true,
+        invoice: true, // Include invoice to get payment status
       },
     });
 
@@ -721,7 +724,7 @@ export async function updateAppointment(
       },
       clientId: appointment.clientId,
       rate: 0, // Rate is now stored in invoice table
-      paid: false, // Payment status is now stored in invoice table
+      paid: appointment.invoice?.status === "PAID" || false, // Check invoice status
       format: appointment.format,
       status: appointment.status,
       isCompleted: appointment.isCompleted,
@@ -822,6 +825,7 @@ export async function getUpcomingOnlineAppointments(): Promise<IEvent[]> {
       include: {
         client: true,
         notes: true,
+        invoice: true, // Include invoice to get payment status
       },
       orderBy: {
         startTime: "asc",
@@ -843,7 +847,7 @@ export async function getUpcomingOnlineAppointments(): Promise<IEvent[]> {
       },
       clientId: appointment.clientId,
       rate: Number(appointment.rate),
-      paid: !!appointment.paid,
+      paid: appointment.invoice?.status === "PAID" || false, // Check invoice status
       format: appointment.format,
       status: appointment.status,
       isCompleted: appointment.isCompleted,
@@ -879,6 +883,7 @@ export async function updateAppointmentStatusAndPayment(
       include: {
         client: true,
         notes: true,
+        invoice: true, // Include invoice to get payment status
       },
     });
 
@@ -897,7 +902,7 @@ export async function updateAppointmentStatusAndPayment(
       },
       clientId: appointment.clientId,
       rate: Number(appointment.rate),
-      paid: !!appointment.paid,
+      paid: appointment.invoice?.status === "PAID" || false, // Check invoice status
       format: appointment.format,
       status: appointment.status,
       isCompleted: appointment.isCompleted,

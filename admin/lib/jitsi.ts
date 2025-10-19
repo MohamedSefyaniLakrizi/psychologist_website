@@ -55,11 +55,11 @@ export function generateJitsiToken(config: JitsiMeetingConfig): string {
   // Calculate JWT expiration time
   let jwtExpiration: number;
   if (endTime) {
-    // If end time is provided, add 1 hour to it
-    jwtExpiration = Math.floor(endTime.getTime() / 1000) + 60 * 60; // +1 hour
+    // If end time is provided, add 1 day to it
+    jwtExpiration = Math.floor(endTime.getTime() / 1000) + 60 * 60 * 24; // +1 day
   } else {
-    // Default: 2 hours from now
-    jwtExpiration = now + 2 * 60 * 60; // 2 hours
+    // Default: 1 day from now
+    jwtExpiration = now + 24 * 60 * 60; // 1 day
   }
 
   // Use provided meeting name or fallback to appointment ID

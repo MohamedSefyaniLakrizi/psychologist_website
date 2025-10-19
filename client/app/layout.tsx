@@ -6,6 +6,7 @@ import Header from "./components/layout/header";
 import { usePathname } from "next/navigation";
 import { Toaster } from "./components/ui/sonner";
 import { SessionProvider } from "next-auth/react";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -55,6 +56,7 @@ export default function RootLayout({
           <LayoutContent>{children}</LayoutContent>
           <Toaster />
         </SessionProvider>
+        <Analytics />
       </body>
     </html>
   );

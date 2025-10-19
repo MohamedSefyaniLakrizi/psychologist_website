@@ -20,8 +20,6 @@ async function processEmails(request: NextRequest) {
     }
 
     const now = new Date();
-    console.log(`🔄 Starting email processing at ${now.toISOString()}`);
-
     // Get emails that should be sent now (with 5-minute buffer)
     const emailsToSend = await (prisma.emailSchedule as any).findMany({
       where: {

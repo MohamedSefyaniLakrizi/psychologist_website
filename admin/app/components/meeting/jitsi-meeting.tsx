@@ -36,6 +36,7 @@ export default function JitsiMeetingComponent({
   showNotes = false,
 }: JitsiMeetingComponentProps) {
   const apiRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoined, setIsJoined] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,12 +101,34 @@ export default function JitsiMeetingComponent({
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, []);
+
   const toggleFullscreen = async () => {
+    const elem = containerRef.current;
+    if (!elem) return;
+
     try {
       if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
+        // Request fullscreen with cross-browser compatibility
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if ((elem as any).mozRequestFullScreen) {
+          (elem as any).mozRequestFullScreen();
+        } else if ((elem as any).webkitRequestFullscreen) {
+          (elem as any).webkitRequestFullscreen();
+        } else if ((elem as any).msRequestFullscreen) {
+          (elem as any).msRequestFullscreen();
+        }
       } else {
-        await document.exitFullscreen();
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          (document as any).mozCancelFullScreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen();
+        } else if ((document as any).msExitFullscreen) {
+          (document as any).msExitFullscreen();
+        }
       }
     } catch (error) {
       console.error("Error toggling fullscreen:", error);
@@ -191,7 +214,9 @@ export default function JitsiMeetingComponent({
     <div className="h-screen bg-background w-full relative flex">
       {/* Header - Hidden in fullscreen */}
       {!isFullscreen && (
-        <div className="absolute top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b p-4">
+        <div
+          className={`absolute top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b p-4`}
+        >
           <div className="container mx-auto flex items-center gap-3">
             <Button
               variant="outline"
@@ -279,15 +304,17 @@ export default function JitsiMeetingComponent({
 
       {/* Main Content Area */}
       <div className="flex flex-1 h-full">
-        {/* Jitsi Meeting */}
+        {/* Jitsi Meeting Container */}
         <div
+          ref={containerRef}
           className={`${isFullscreen ? "h-full" : "pt-16 h-full"} relative transition-all duration-300 w-full flex-1`}
         >
+          {/* Fullscreen Button - Always visible */}
           <div
             className={`${
               isFullscreen
                 ? "absolute top-4 left-4 z-50"
-                : "absolute top-22 left-4 z-50"
+                : "absolute top-20 left-4 z-50"
             }`}
           >
             <Button
@@ -304,12 +331,14 @@ export default function JitsiMeetingComponent({
               )}
             </Button>
           </div>
+
+          {/* Jitsi Meeting Wrapper */}
           <div
             className={`${
               isFullscreen
                 ? "h-full"
                 : "my-2 mx-1 rounded-lg h-[calc(100%-16px)]"
-            }  overflow-hidden`}
+            } overflow-hidden`}
           >
             <JaaSMeeting
               appId={process.env.NEXT_PUBLIC_JITSI_APP_ID || ""}
@@ -321,18 +350,21 @@ export default function JitsiMeetingComponent({
                 if (iframeRef) {
                   iframeRef.style.height = "100%";
                   iframeRef.style.width = "100%";
-
-                  // Add SameSite None cookie configuration for cross-site compatibility
-                  iframeRef.setAttribute(
-                    "sandbox",
-                    "allow-same-origin allow-scripts allow-popups allow-forms allow-storage-access-by-user-activation allow-top-navigation"
-                  );
-                  iframeRef.setAttribute(
-                    "allow",
-                    "microphone; camera; speaker-selection; display-capture"
-                  );
-                  iframeRef.setAttribute("credentialless", "true");
                 }
+              }}
+              configOverwrite={{
+                startWithAudioMuted: false,
+                startWithVideoMuted: false,
+                enableWelcomePage: false,
+                prejoinPageEnabled: true,
+                defaultLanguage: "fr",
+              }}
+              interfaceConfigOverwrite={{
+                SHOW_JITSI_WATERMARK: false,
+                SHOW_WATERMARK_FOR_GUESTS: false,
+                DEFAULT_BACKGROUND: "#1a1a1a",
+                LANG_DETECTION: true,
+                DEFAULT_LANGUAGE: "fr",
               }}
             />
           </div>

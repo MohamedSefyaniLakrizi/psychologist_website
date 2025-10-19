@@ -230,6 +230,19 @@ function ClientMeetingPageContent() {
                 iframeRef.style.width = "100%";
               }
             }}
+            configOverwrite={{
+              startWithAudioMuted: false,
+              startWithVideoMuted: false,
+              enableWelcomePage: false,
+              prejoinPageEnabled: false,
+              defaultLanguage: "fr",
+            }}
+            interfaceConfigOverwrite={{
+              SHOW_JITSI_WATERMARK: false,
+              SHOW_WATERMARK_FOR_GUESTS: false,
+              LANG_DETECTION: true,
+              DEFAULT_LANGUAGE: "fr",
+            }}
           />
         </div>
       </>

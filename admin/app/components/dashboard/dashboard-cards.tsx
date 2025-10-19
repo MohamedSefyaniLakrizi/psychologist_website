@@ -365,9 +365,9 @@ export function AlertsCard({
   }
 
   return (
-    <Card className="border-orange-200 bg-orange-50 px-3 py-4 gap-2">
+    <Card className="px-3 py-4 gap-2">
       <CardHeader className="px-2">
-        <CardTitle className="flex items-center gap-2 text-orange-800 text-sm ">
+        <CardTitle className="flex items-center gap-2 text-sm ">
           <AlertTriangle className="h-4 w-4" />
           Alertes
         </CardTitle>
