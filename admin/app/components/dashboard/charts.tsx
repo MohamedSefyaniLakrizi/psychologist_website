@@ -35,7 +35,7 @@ export function AppointmentTrendChart({ data }: AppointmentChartProps) {
   // Transform data to ensure proper structure
   const chartData = data.map((item) => ({
     month: item.month,
-    rendezVous: Number(item.rendezVous) || 5,
+    rendezVous: Number(item.rendezVous),
   }));
 
   return (
@@ -58,8 +58,8 @@ export function AppointmentTrendChart({ data }: AppointmentChartProps) {
               <YAxis className="text-xs" tick={{ fontSize: 12 }} width={30} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "hsl(var(--popover))",
-                  border: "1px solid hsl(var(--border))",
+                  backgroundColor: "white",
+                  border: "1px solid gray",
                   borderRadius: "6px",
                   fontSize: "12px",
                 }}
@@ -108,8 +108,8 @@ export function RevenueChart({ data }: RevenueChartProps) {
             <YAxis className="text-xs" tick={{ fontSize: 12 }} width={40} />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--popover))",
-                border: "1px solid hsl(var(--border))",
+                backgroundColor: "white",
+                border: "1px solid gray",
                 borderRadius: "6px",
                 fontSize: "12px",
               }}
@@ -142,7 +142,12 @@ export function AppointmentStatusChart({ data }: StatusPieChartProps) {
     color: item.color,
   }));
 
-  const COLORS = ["#f59e0b", "#ef4444", "#10b981", "#6b7280"];
+  const COLORS = {
+    "À venir": "#f59e0b",
+    Absent: "#ef4444",
+    Assisté: "#10b981",
+    Annulé: "#6b7280",
+  };
 
   return (
     <Card className="h-full">
@@ -162,16 +167,13 @@ export function AppointmentStatusChart({ data }: StatusPieChartProps) {
               dataKey="value"
             >
               {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={COLORS[index % COLORS.length]}
-                />
+                <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
               ))}
             </Pie>
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--popover))",
-                border: "1px solid hsl(var(--border))",
+                backgroundColor: "white",
+                border: "1px solid gray",
                 borderRadius: "6px",
                 fontSize: "12px",
               }}

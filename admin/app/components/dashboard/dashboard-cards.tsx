@@ -373,7 +373,7 @@ export function AlertsCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-2">
-        <div className="space-y-2">
+        <div className="space-y-2 flex flex-col">
           {overdueInvoices > 0 && (
             <Link href="/invoices">
               <div className="flex items-center justify-between p-2 bg-red-50 rounded-lg cursor-pointer hover:bg-red-100 transition-colors">
@@ -391,7 +391,7 @@ export function AlertsCard({
           )}
           {upcomingAppointments > 0 && (
             <Link href="/calendar">
-              <div className="flex items-center justify-between p-2 bg-blue-50 rounded cursor-pointer hover:bg-blue-100 transition-colors">
+              <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-3 w-3 text-blue-600" />
                   <span className="font-medium text-blue-800 text-xs">
