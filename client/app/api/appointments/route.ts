@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     try {
       // Find existing client or create new one without updating existing data
       let client = await prisma.client.findUnique({
-        where: { email },
+        where: { email, deleted: false }, // Exclude soft-deleted clients
       });
 
       if (!client) {

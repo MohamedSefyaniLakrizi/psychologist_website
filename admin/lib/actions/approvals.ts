@@ -3,12 +3,13 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-// Get pending clients (not confirmed)
+// Get pending clients (not confirmed, not deleted)
 export async function getPendingClients() {
   try {
     const clients = await prisma.client.findMany({
       where: {
         confirmed: false,
+        deleted: false, // Exclude soft-deleted clients
       },
       orderBy: {
         createdAt: "desc",

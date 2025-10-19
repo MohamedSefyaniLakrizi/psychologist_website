@@ -19,12 +19,15 @@ model Client {
   sendInvoiceAutomatically Boolean @default(true)
   defaultRate          Int         @default(300)
   confirmed            Boolean     @default(false) // For approval system
+  deleted              Boolean     @default(false) // Soft delete flag - if true, client has data (appointments/invoices) and is archived
   appointments         Appointment[]
   notes                Note[]
   documents            Document[]
   invoices             Invoice[]
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
+
+  @@index([deleted])
 }
 
 model Appointment {

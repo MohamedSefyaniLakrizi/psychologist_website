@@ -19,11 +19,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get confirmed client info
+    // Get confirmed client info (exclude deleted)
     const client = await prisma.client.findUnique({
       where: {
         id: clientId,
         confirmed: true,
+        deleted: false, // Exclude soft-deleted clients
       },
       select: {
         firstName: true,

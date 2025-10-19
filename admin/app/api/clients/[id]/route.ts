@@ -14,6 +14,7 @@ export async function GET(
       where: {
         id: clientId,
         confirmed: true,
+        deleted: false, // Exclude soft-deleted clients
       },
     });
 

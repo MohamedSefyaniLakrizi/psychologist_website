@@ -380,7 +380,7 @@ export function AlertsCard({
                 <div className="flex items-center gap-2">
                   <Receipt className="h-3 w-3 text-red-600" />
                   <span className="font-medium text-red-800 text-xs">
-                    Factures en retard
+                    Paiement en retard
                   </span>
                 </div>
                 <Badge variant="destructive" className="text-xs">
