@@ -7,10 +7,14 @@ const appointmentSchema = z.object({
   lastName: z.string().min(1, "Le nom est requis"),
   email: z.string().email("Email invalide"),
   phoneNumber: z.string().min(1, "Le numéro de téléphone est requis"),
-  appointmentDate: z.string(), // ISO date string
-  appointmentTime: z.string(), // HH:MM format
-  format: z.enum(["ONLINE", "IN_PERSON"]),
-  preferredContact: z.enum(["EMAIL", "PHONE", "WHATSAPP"]),
+  appointmentDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format de date invalide (YYYY-MM-DD)"), // YYYY-MM-DD format
+  appointmentTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, "Format d'heure invalide (HH:MM)"), // HH:MM format
+  format: z.enum(["ONLINE", "FACE_TO_FACE"]), // Updated to match AppointmentFormat enum
+  preferredContact: z.enum(["EMAIL", "PHONE", "SMS", "WHATSAPP"]), // Updated to match ContactMethod enum
 });
 
 export async function POST(request: Request) {
@@ -30,28 +34,48 @@ export async function POST(request: Request) {
     } = validatedData;
 
     // Parse the appointment date and time
-    const startDateTime = new Date(`${appointmentDate}T${appointmentTime}:00`);
+    console.log("Received appointmentDate:", appointmentDate);
+    console.log("Received appointmentTime:", appointmentTime);
+
+    // appointmentDate comes as YYYY-MM-DD format, appointmentTime as "HH:MM"
+    const [hours, minutes] = appointmentTime.split(":").map(Number);
+    const [year, month, day] = appointmentDate.split("-").map(Number);
+
+    console.log("Parsed components:", { year, month, day, hours, minutes });
+
+    // Create date in local timezone
+    const startDateTime = new Date(year, month - 1, day, hours, minutes, 0);
+    console.log("Created startDateTime:", startDateTime);
+
+    // Validate the parsed date
+    if (isNaN(startDateTime.getTime())) {
+      throw new Error(
+        `Invalid date/time: ${appointmentDate} ${appointmentTime}`
+      );
+    }
+
     const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // Add 1 hour
 
     try {
-      // Create or find client
-      const client = await prisma.client.upsert({
+      // Find existing client or create new one without updating existing data
+      let client = await prisma.client.findUnique({
         where: { email },
-        update: {
-          firstName,
-          lastName,
-          phoneNumber,
-          preferredContact,
-        },
-        create: {
-          firstName,
-          lastName,
-          email,
-          phoneNumber,
-          preferredContact,
-          confirmed: false,
-        },
       });
+
+      if (!client) {
+        // Only create if client doesn't exist
+        client = await prisma.client.create({
+          data: {
+            firstName,
+            lastName,
+            email,
+            phoneNumber,
+            preferredContact,
+            confirmed: false,
+          },
+        });
+      }
+      // If client exists, use their existing data without updating
 
       // Create appointment
       const appointment = await prisma.appointment.create({
@@ -59,7 +83,10 @@ export async function POST(request: Request) {
           clientId: client.id,
           startTime: startDateTime,
           endTime: endDateTime,
-          format,
+          format: format as "ONLINE" | "FACE_TO_FACE",
+          status: "NOT_YET_ATTENDED",
+          isCompleted: false,
+          isRecurring: false,
           confirmed: false,
         },
       });
@@ -81,7 +108,7 @@ export async function POST(request: Request) {
               date: startDateTime.toISOString(),
               time: appointmentTime,
               preferred_method: preferredContact,
-              appointmentType: format,
+              appointmentType: format === "ONLINE" ? "ONLINE" : "FACE_TO_FACE",
             }),
           }
         );
@@ -130,7 +157,10 @@ export async function POST(request: Request) {
         clientId: mockClient.id,
         startTime: startDateTime,
         endTime: endDateTime,
-        format,
+        format: format as "ONLINE" | "FACE_TO_FACE",
+        status: "NOT_YET_ATTENDED",
+        isCompleted: false,
+        isRecurring: false,
         confirmed: false,
       };
 
@@ -151,7 +181,7 @@ export async function POST(request: Request) {
               date: startDateTime.toISOString(),
               time: appointmentTime,
               preferred_method: preferredContact,
-              appointmentType: format,
+              appointmentType: format === "ONLINE" ? "ONLINE" : "FACE_TO_FACE",
             }),
           }
         );
@@ -223,7 +253,7 @@ export async function GET(request: Request) {
         id: "mock-appointment-1",
         startTime: new Date(),
         endTime: new Date(Date.now() + 60 * 60 * 1000),
-        format: "IN_PERSON",
+        format: "FACE_TO_FACE",
         confirmed: false,
         client: {
           id: "mock-client-1",

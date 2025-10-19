@@ -27,9 +27,9 @@ export async function GET(request: Request) {
       const weekAvailability = await getWeekAvailability(params.weekStartDate);
       return NextResponse.json(weekAvailability);
     } else {
-      // Get general weekly template
-      const weeklyTemplate = await getWeeklyTemplate();
-      return NextResponse.json(weeklyTemplate);
+      // Default: Get 3 months of availability data for the calendar
+      const monthsAvailability = await getMonthsAvailability(3);
+      return NextResponse.json(monthsAvailability);
     }
   } catch (error) {
     console.error("Availability API error:", error);
@@ -49,12 +49,16 @@ async function getWeeklyTemplate() {
     return weeklyAvailability;
   } catch (error) {
     console.error("Error fetching weekly template:", error);
-    // Fallback to mock data if database is unavailable
+    // Fallback to mock data if database is unavailable - including multiple periods per day
     return [
-      { weekday: 1, startTime: "09:00", endTime: "17:00" }, // Tuesday
-      { weekday: 2, startTime: "09:00", endTime: "17:00" }, // Wednesday
-      { weekday: 3, startTime: "09:00", endTime: "17:00" }, // Thursday
-      { weekday: 4, startTime: "09:00", endTime: "17:00" }, // Friday
+      { weekday: 1, startTime: "09:00", endTime: "12:00" }, // Tuesday morning
+      { weekday: 1, startTime: "14:00", endTime: "17:00" }, // Tuesday afternoon
+      { weekday: 2, startTime: "09:00", endTime: "12:00" }, // Wednesday morning
+      { weekday: 2, startTime: "14:00", endTime: "17:00" }, // Wednesday afternoon
+      { weekday: 3, startTime: "09:00", endTime: "12:00" }, // Thursday morning
+      { weekday: 3, startTime: "14:00", endTime: "17:00" }, // Thursday afternoon
+      { weekday: 4, startTime: "09:00", endTime: "12:00" }, // Friday morning
+      { weekday: 4, startTime: "14:00", endTime: "17:00" }, // Friday afternoon
     ];
   }
 }
@@ -64,73 +68,80 @@ async function getDateAvailability(dateStr: string) {
   const weekday = (date.getDay() + 6) % 7; // Convert Sunday=0 to Monday=0 format
 
   try {
-    // Check for date-specific overrides first
-    const dateOverride = await prisma.dateAvailability.findFirst({
+    // Check for date-specific overrides first (get ALL records for this date)
+    const dateOverrides = await prisma.dateAvailability.findMany({
       where: {
         date: {
           equals: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
         },
       },
+      orderBy: [{ startTime: "asc" }],
     });
 
-    if (dateOverride) {
-      return dateOverride.startTime && dateOverride.endTime
-        ? {
-            available: true,
-            startTime: dateOverride.startTime,
-            endTime: dateOverride.endTime,
-            timeSlots: await generateAvailableTimeSlots(
-              dateOverride.startTime,
-              dateOverride.endTime,
-              dateStr
-            ),
-          }
-        : { available: false, timeSlots: [] };
+    if (dateOverrides.length > 0) {
+      // Check if any override has null startTime/endTime (meaning closed)
+      const closedOverride = dateOverrides.find(
+        (override: any) => !override.startTime || !override.endTime
+      );
+      if (closedOverride) {
+        return { available: false, timeSlots: [] };
+      }
+
+      // Combine all time slots from all availability periods
+      const allTimeSlots: string[] = [];
+      for (const override of dateOverrides) {
+        if (override.startTime && override.endTime) {
+          const slots = await generateAvailableTimeSlots(
+            override.startTime,
+            override.endTime,
+            dateStr
+          );
+          allTimeSlots.push(...slots);
+        }
+      }
+
+      return {
+        available: true,
+        timeSlots: allTimeSlots.sort(), // Sort time slots
+        availabilityPeriods: dateOverrides.map((override: any) => ({
+          startTime: override.startTime,
+          endTime: override.endTime,
+        })),
+      };
     }
 
-    // Fall back to weekly template
-    const weeklyTemplate = await prisma.weeklyAvailability.findFirst({
+    // Fall back to weekly template (get ALL records for this weekday)
+    const weeklyTemplates = await prisma.weeklyAvailability.findMany({
       where: { weekday },
+      orderBy: [{ startTime: "asc" }],
     });
 
-    if (!weeklyTemplate) {
+    if (!weeklyTemplates.length) {
       return { available: false, timeSlots: [] };
+    }
+
+    // Combine all time slots from all weekly availability periods
+    const allTimeSlots: string[] = [];
+    for (const template of weeklyTemplates) {
+      const slots = await generateAvailableTimeSlots(
+        template.startTime,
+        template.endTime,
+        dateStr
+      );
+      allTimeSlots.push(...slots);
     }
 
     return {
       available: true,
-      startTime: weeklyTemplate.startTime,
-      endTime: weeklyTemplate.endTime,
-      timeSlots: await generateAvailableTimeSlots(
-        weeklyTemplate.startTime,
-        weeklyTemplate.endTime,
-        dateStr
-      ),
+      timeSlots: allTimeSlots.sort(), // Sort time slots
+      availabilityPeriods: weeklyTemplates.map((template: any) => ({
+        startTime: template.startTime,
+        endTime: template.endTime,
+      })),
     };
   } catch (error) {
     console.error("Error fetching date availability:", error);
-
-    // Fallback to mock data based on weekday
-    const mockWeeklyTemplate = {
-      1: { startTime: "09:00", endTime: "17:00" }, // Tuesday
-      2: { startTime: "09:00", endTime: "17:00" }, // Wednesday
-      3: { startTime: "09:00", endTime: "17:00" }, // Thursday
-      4: { startTime: "09:00", endTime: "17:00" }, // Friday
-    }[weekday];
-
-    if (!mockWeeklyTemplate) {
-      return { available: false, timeSlots: [] };
-    }
-
-    return {
-      available: true,
-      startTime: mockWeeklyTemplate.startTime,
-      endTime: mockWeeklyTemplate.endTime,
-      timeSlots: generateTimeSlots(
-        mockWeeklyTemplate.startTime,
-        mockWeeklyTemplate.endTime
-      ),
-    };
+    return { available: false, timeSlots: [] };
   }
 }
 
@@ -152,6 +163,167 @@ async function getWeekAvailability(weekStartDateStr: string) {
   }
 
   return weekAvailability;
+}
+
+async function getMonthsAvailability(monthsAhead: number) {
+  const today = new Date();
+  const endDate = new Date(today);
+  endDate.setMonth(today.getMonth() + monthsAhead);
+
+  try {
+    // Get all date-specific overrides in the range
+    const dateOverrides = await prisma.dateAvailability.findMany({
+      where: {
+        date: {
+          gte: today,
+          lte: endDate,
+        },
+      },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    });
+
+    // Get all weekly templates
+    const weeklyTemplates = await prisma.weeklyAvailability.findMany({
+      orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+    });
+
+    // Get all existing appointments in the range for filtering booked slots
+    const existingAppointments = await prisma.appointment.findMany({
+      where: {
+        startTime: {
+          gte: today,
+          lte: endDate,
+        },
+        OR: [
+          { confirmed: true },
+          { confirmed: false }, // Include unconfirmed to prevent double booking
+        ],
+      },
+      select: {
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    // Create a map of booked times by date
+    const bookedTimesByDate: { [dateStr: string]: Set<string> } = {};
+    existingAppointments.forEach((apt: any) => {
+      const dateStr = apt.startTime.toISOString().split("T")[0];
+      if (!bookedTimesByDate[dateStr]) {
+        bookedTimesByDate[dateStr] = new Set();
+      }
+      bookedTimesByDate[dateStr].add(apt.startTime.toTimeString().slice(0, 5));
+    });
+
+    // Create a map of date overrides
+    const dateOverrideMap: { [dateStr: string]: any[] } = {};
+    dateOverrides.forEach((override: any) => {
+      const dateStr = override.date.toISOString().split("T")[0];
+      if (!dateOverrideMap[dateStr]) {
+        dateOverrideMap[dateStr] = [];
+      }
+      dateOverrideMap[dateStr].push(override);
+    });
+
+    // Generate availability for each day in the range
+    const allAvailability = [];
+    const currentDate = new Date(today);
+
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split("T")[0];
+      const weekday = (currentDate.getDay() + 6) % 7; // Convert Sunday=0 to Monday=0 format
+
+      let dayAvailability;
+
+      // Check for date-specific overrides first
+      if (dateOverrideMap[dateStr]) {
+        const overrides = dateOverrideMap[dateStr];
+
+        // Check if any override has null startTime/endTime (meaning closed)
+        const closedOverride = overrides.find(
+          (override) => !override.startTime || !override.endTime
+        );
+        if (closedOverride) {
+          dayAvailability = { available: false, timeSlots: [] };
+        } else {
+          // Combine all time slots from all availability periods
+          const allTimeSlots: string[] = [];
+          for (const override of overrides) {
+            if (override.startTime && override.endTime) {
+              const slots = generateTimeSlots(
+                override.startTime,
+                override.endTime
+              );
+              allTimeSlots.push(...slots);
+            }
+          }
+
+          // Filter out booked slots
+          const bookedTimes = bookedTimesByDate[dateStr] || new Set();
+          const availableSlots = allTimeSlots.filter(
+            (slot) => !bookedTimes.has(slot)
+          );
+
+          dayAvailability = {
+            available: true,
+            timeSlots: availableSlots.sort(),
+            availabilityPeriods: overrides.map((override) => ({
+              startTime: override.startTime,
+              endTime: override.endTime,
+            })),
+          };
+        }
+      } else {
+        // Fall back to weekly template
+        const weeklyPeriodsForDay = weeklyTemplates.filter(
+          (template: any) => template.weekday === weekday
+        );
+
+        if (!weeklyPeriodsForDay.length) {
+          dayAvailability = { available: false, timeSlots: [] };
+        } else {
+          // Combine all time slots from all weekly availability periods
+          const allTimeSlots: string[] = [];
+          for (const template of weeklyPeriodsForDay) {
+            const slots = generateTimeSlots(
+              template.startTime,
+              template.endTime
+            );
+            allTimeSlots.push(...slots);
+          }
+
+          // Filter out booked slots
+          const bookedTimes = bookedTimesByDate[dateStr] || new Set();
+          const availableSlots = allTimeSlots.filter(
+            (slot) => !bookedTimes.has(slot)
+          );
+
+          dayAvailability = {
+            available: true,
+            timeSlots: availableSlots.sort(),
+            availabilityPeriods: weeklyPeriodsForDay.map((template: any) => ({
+              startTime: template.startTime,
+              endTime: template.endTime,
+            })),
+          };
+        }
+      }
+
+      allAvailability.push({
+        date: dateStr,
+        weekday,
+        ...dayAvailability,
+      });
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return allAvailability;
+  } catch (error) {
+    console.error("Error fetching months availability:", error);
+    return [];
+  }
 }
 
 // Generate time slots and filter out booked ones

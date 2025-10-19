@@ -27,10 +27,10 @@ const formSchema = z.object({
     .string()
     .min(1, "Le numéro de téléphone est requis")
     .regex(/^(\d{2}\s){4}\d{2}$/, "Le numéro doit contenir 10 chiffres"),
-  format: z.enum(["ONLINE", "IN_PERSON"], {
+  format: z.enum(["ONLINE", "FACE_TO_FACE"], {
     message: "Le type de consultation est requis",
   }),
-  preferredContact: z.enum(["EMAIL", "PHONE", "WHATSAPP"], {
+  preferredContact: z.enum(["EMAIL", "PHONE", "SMS", "WHATSAPP"], {
     message: "La méthode de contact est requise",
   }),
 });
@@ -49,7 +49,7 @@ export default function BookPage() {
       lastName: "",
       email: "",
       phoneNumber: "",
-      format: "IN_PERSON",
+      format: "FACE_TO_FACE",
       preferredContact: "EMAIL",
     },
   });
@@ -69,9 +69,15 @@ export default function BookPage() {
     }
 
     try {
+      // Format date as YYYY-MM-DD to avoid timezone issues
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const day = String(selectedDate.getDate()).padStart(2, "0");
+      const appointmentDate = `${year}-${month}-${day}`;
+
       const submitData = {
         ...data,
-        appointmentDate: selectedDate.toISOString(),
+        appointmentDate,
         appointmentTime: selectedTime,
       };
 
@@ -117,7 +123,7 @@ export default function BookPage() {
     setSelectedTime(time);
   };
 
-  const handleFormatSelect = (format: "ONLINE" | "IN_PERSON") => {
+  const handleFormatSelect = (format: "ONLINE" | "FACE_TO_FACE") => {
     form.setValue("format", format);
     setStep("calendar");
   };
@@ -143,7 +149,7 @@ export default function BookPage() {
         {step === "type" && (
           <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             <button
-              onClick={() => handleFormatSelect("IN_PERSON")}
+              onClick={() => handleFormatSelect("FACE_TO_FACE")}
               className="group relative cursor-pointer overflow-hidden rounded-lg bg-white p-8 shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border border-gray-200"
             >
               <div className="text-center">
@@ -265,13 +271,13 @@ export default function BookPage() {
                 ← Retour
               </button>
             </div>
-
-            <AppointmentCalendar
-              onDateTimeSelect={handleDateTimeSelect}
-              selectedDate={selectedDate}
-              selectedTime={selectedTime}
-            />
-
+            <div className="w-full flex justify-center">
+              <AppointmentCalendar
+                onDateTimeSelect={handleDateTimeSelect}
+                selectedDate={selectedDate}
+                selectedTime={selectedTime}
+              />
+            </div>
             {selectedDate && selectedTime && (
               <div className="mt-6 flex justify-end">
                 <Button
@@ -437,6 +443,10 @@ export default function BookPage() {
                           <div className="flex items-center gap-3">
                             <RadioGroupItem value="PHONE" id="phone" />
                             <Label htmlFor="phone">Téléphone</Label>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <RadioGroupItem value="SMS" id="sms" />
+                            <Label htmlFor="sms">SMS</Label>
                           </div>
                           <div className="flex items-center gap-3">
                             <RadioGroupItem value="WHATSAPP" id="whatsapp" />

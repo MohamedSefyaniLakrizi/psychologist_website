@@ -88,13 +88,6 @@ export default function Header() {
                 Consultations
               </Link>
               <Link
-                href="/blog"
-                onClick={closeMobileMenu}
-                className="block text-lg font-medium text-gray-900 hover:text-blue-900"
-              >
-                Blog
-              </Link>
-              <Link
                 href="/contact"
                 onClick={closeMobileMenu}
                 className="block text-lg font-medium text-gray-900 hover:text-blue-900"
@@ -128,9 +121,6 @@ export default function Header() {
                 <span>contact@malikalkhabir.ma</span>
               </a>
             </div>
-            <Link href="/admin" className="flex gap-1 items-center">
-              <span className="text-sm underline">Espace Admin</span>
-            </Link>
           </div>
         </div>
       </div>
@@ -154,14 +144,6 @@ export default function Header() {
           <Mail size={20} />
           <span className="text-xs md:text-sm">contact@malikalkhabir.ma</span>
         </a>
-        <Link
-          href="/admin"
-          className="absolute right-4 flex gap-1 items-center"
-        >
-          <span className="text-xs hidden md:block md:text-sm underline">
-            Espace Admin
-          </span>
-        </Link>
       </aside>
       <header className="w-full flex justify-center border-b border-gray-200">
         <div className="w-full 1200:w-[1200px] relative">
@@ -213,14 +195,6 @@ export default function Header() {
                       <Link href="/book">Consultations</Link>
                     </NavigationMenuLink>
                   </NavigationMenuItem>
-                  <NavigationMenuItem>
-                    <NavigationMenuLink
-                      asChild
-                      className={navigationMenuTriggerStyle()}
-                    >
-                      <Link href="/blog">Blog</Link>
-                    </NavigationMenuLink>
-                  </NavigationMenuItem>{" "}
                   <NavigationMenuItem>
                     <NavigationMenuLink
                       asChild

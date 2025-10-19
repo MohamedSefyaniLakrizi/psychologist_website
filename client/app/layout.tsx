@@ -24,14 +24,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      {!isAdminPage && <Header />}
-      {isAdminPage ? (
-        children
-      ) : (
-        <div className="flex justify-center">
-          <div className="w-full 1200:w-[1200px]">{children}</div>
-        </div>
-      )}
+      {!isAdminPage && <Header />} {children}
     </div>
   );
 }

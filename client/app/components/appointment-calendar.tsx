@@ -11,10 +11,20 @@ interface TimeSlot {
   available: boolean;
 }
 
+interface AvailabilityPeriod {
+  startTime: string | null;
+  endTime: string | null;
+}
+
 interface DayAvailability {
   date: string;
   available: boolean;
   timeSlots: string[];
+  availabilityPeriods?: AvailabilityPeriod[];
+}
+
+interface WeekAvailability {
+  [dateStr: string]: DayAvailability;
 }
 
 interface AppointmentCalendarProps {
@@ -34,59 +44,118 @@ export default function AppointmentCalendar({
   );
   const [availability, setAvailability] =
     React.useState<DayAvailability | null>(null);
-  const [loading, setLoading] = React.useState(false);
+  const [weekAvailability, setWeekAvailability] =
+    React.useState<WeekAvailability>({});
+  const [prefetchLoading, setPrefetchLoading] = React.useState(true);
   const [bookedSlots, setBookedSlots] = React.useState<Set<string>>(new Set());
 
-  // Fetch availability for the selected date
-  const fetchAvailability = React.useCallback(async (selectedDate: Date) => {
-    if (!selectedDate) return;
+  // Helper function to format date to local date string (YYYY-MM-DD) without timezone issues
+  const formatDateToLocal = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
-    setLoading(true);
+  // Fetch 3 months of availability data in a single API call (default behavior)
+  const prefetchAvailability = React.useCallback(async () => {
+    setPrefetchLoading(true);
     try {
-      const dateStr = selectedDate.toISOString().split("T")[0];
-      const response = await fetch(`/api/availability?date=${dateStr}`);
+      console.log(
+        "Fetching 3 months of availability data in a single API call..."
+      );
+
+      const response = await fetch("/api/availability");
 
       if (!response.ok) {
-        throw new Error("Failed to fetch availability");
+        throw new Error(`Failed to fetch availability: ${response.status}`);
       }
 
-      const data = await response.json();
-      setAvailability(data);
+      const allAvailabilityData = await response.json();
 
-      // TODO: Fetch booked appointments for this date
-      // For now, simulate some booked slots
-      const mockBookedSlots = new Set(["14:00", "15:00"]); // Mock booked times
-      setBookedSlots(mockBookedSlots);
+      // Process the response into our WeekAvailability format
+      const weekAvailabilityData: WeekAvailability = {};
+
+      if (Array.isArray(allAvailabilityData)) {
+        allAvailabilityData.forEach(
+          (dayData: DayAvailability & { weekday: number }) => {
+            weekAvailabilityData[dayData.date] = dayData;
+          }
+        );
+      }
+
+      setWeekAvailability(weekAvailabilityData);
+      console.log(
+        `Successfully prefetched availability for ${Object.keys(weekAvailabilityData).length} days with a single API call`
+      );
     } catch (error) {
-      console.error("Error fetching availability:", error);
-      setAvailability(null);
+      console.error("Error prefetching availability:", error);
+      // Set empty availability if API fails
+      setWeekAvailability({});
     } finally {
-      setLoading(false);
+      setPrefetchLoading(false);
     }
   }, []);
 
+  // Get availability for the selected date from prefetched data only
+  const getAvailability = React.useCallback(
+    (selectedDate: Date) => {
+      if (!selectedDate) {
+        setAvailability(null);
+        return;
+      }
+
+      const dateStr = formatDateToLocal(selectedDate);
+      const dayAvailability = weekAvailability[dateStr];
+
+      if (dayAvailability) {
+        setAvailability(dayAvailability);
+      } else {
+        // If date is not in prefetched data, assume not available
+        setAvailability({
+          date: dateStr,
+          available: false,
+          timeSlots: [],
+        });
+      }
+    },
+    [weekAvailability]
+  );
+
   // Check if a date should be disabled
-  const isDateDisabled = React.useCallback((date: Date) => {
-    // Disable past dates
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (date < today) return true;
+  const isDateDisabled = React.useCallback(
+    (date: Date) => {
+      // Disable past dates
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (date < today) return true;
 
-    // Disable weekends (Saturday = 6, Sunday = 0)
-    const dayOfWeek = date.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) return true;
+      // If still loading prefetch data, don't disable any dates
+      if (prefetchLoading) return false;
 
-    // TODO: Check against database availability
-    // For now, we'll let the API call determine availability
-    return false;
-  }, []);
+      // Check against prefetched availability data
+      const dateStr = formatDateToLocal(date);
+      const dayAvailability = weekAvailability[dateStr];
+
+      // If we have prefetched data and the day is not available, disable it
+      if (dayAvailability && !dayAvailability.available) return true;
+
+      // If we have prefetched data and the day is available, don't disable
+      if (dayAvailability && dayAvailability.available) return false;
+
+      // If we don't have data for this date in our prefetched range, disable it
+      // This prevents users from selecting dates too far in the future
+      return true;
+    },
+    [weekAvailability, prefetchLoading]
+  );
 
   // Handle date selection
   const handleDateSelect = (newDate: Date | undefined) => {
     setDate(newDate);
     setSelectedTimeSlot(null);
     if (newDate) {
-      fetchAvailability(newDate);
+      getAvailability(newDate);
     } else {
       setAvailability(null);
     }
@@ -100,6 +169,18 @@ export default function AppointmentCalendar({
     }
   };
 
+  // Effect to prefetch availability data on component mount
+  React.useEffect(() => {
+    prefetchAvailability();
+  }, [prefetchAvailability]);
+
+  // Effect to update availability when prefetch completes and a date is selected
+  React.useEffect(() => {
+    if (!prefetchLoading && date) {
+      getAvailability(date);
+    }
+  }, [prefetchLoading, date, getAvailability]);
+
   // Generate available time slots
   const availableTimeSlots: TimeSlot[] = React.useMemo(() => {
     if (!availability || !availability.available) return [];
@@ -111,8 +192,8 @@ export default function AppointmentCalendar({
   }, [availability, bookedSlots]);
 
   return (
-    <Card className="gap-0 p-0">
-      <CardContent className="relative p-0 md:pr-48">
+    <Card className="gap-0 p-0 w-max">
+      <CardContent className="relative p-0 lg:pr-48">
         <div className="p-6">
           <Calendar
             mode="single"
@@ -120,6 +201,8 @@ export default function AppointmentCalendar({
             onSelect={handleDateSelect}
             disabled={isDateDisabled}
             showOutsideDays={false}
+            weekStartsOn={1} // Monday = 1, Sunday = 0
+            numberOfMonths={2}
             className="bg-transparent p-0 [--cell-size:--spacing(10)] md:[--cell-size:--spacing(12)]"
             formatters={{
               formatWeekdayName: (date) => {
@@ -129,17 +212,22 @@ export default function AppointmentCalendar({
           />
         </div>
 
-        <div className="no-scrollbar inset-y-0 right-0 flex max-h-72 w-full scroll-pb-6 flex-col gap-4 overflow-y-auto border-t p-6 md:absolute md:max-h-none md:w-48 md:border-t-0 md:border-l">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
+        <div className="no-scrollbar inset-y-0 right-0 flex max-h-72 w-full scroll-pb-6 flex-col gap-4 overflow-y-auto border-t p-6 lg:absolute lg:max-h-none lg:w-48 lg:border-t-0 lg:border-l">
+          {prefetchLoading ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Loader2 className="h-6 w-6 animate-spin mb-2" />
+              <p className="text-sm text-gray-500">
+                Chargement des disponibilités...
+              </p>
             </div>
           ) : date && availability ? (
             availability.available ? (
               <div className="grid gap-2">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">
-                  Créneaux disponibles
-                </h3>
+                <div className="mb-3">
+                  <h3 className="text-sm font-medium text-gray-700 mb-1">
+                    Créneaux disponibles
+                  </h3>
+                </div>
                 {availableTimeSlots.length > 0 ? (
                   availableTimeSlots.map(({ time, available }) => (
                     <Button
@@ -153,7 +241,12 @@ export default function AppointmentCalendar({
                         !available ? "opacity-50 cursor-not-allowed" : ""
                       }`}
                     >
-                      {time}
+                      {(() => {
+                        const [hours, minutes] = time.split(":").map(Number);
+                        const endHours = hours + 1;
+                        const endTime = `${endHours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+                        return `${time} - ${endTime}`;
+                      })()}
                       {!available && (
                         <span className="ml-2 text-xs">(Réservé)</span>
                       )}
@@ -195,7 +288,18 @@ export default function AppointmentCalendar({
                   year: "numeric",
                 })}
               </span>{" "}
-              à <span className="font-medium">{selectedTimeSlot}</span>.
+              de{" "}
+              <span className="font-medium">
+                {(() => {
+                  const [hours, minutes] = selectedTimeSlot
+                    .split(":")
+                    .map(Number);
+                  const endHours = hours + 1;
+                  const endTime = `${endHours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+                  return `${selectedTimeSlot} à ${endTime}`;
+                })()}
+              </span>
+              .
             </>
           ) : (
             <>Sélectionnez une date et un créneau horaire.</>
