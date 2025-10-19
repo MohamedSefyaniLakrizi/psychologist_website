@@ -93,36 +93,6 @@ const generateAppointmentButton = (
 };
 
 /**
- * Helper function to generate info box for appointment format
- */
-const generateAppointmentInfoBox = (
-  appointment: Appointment,
-  startTime: string
-): string => {
-  if (appointment.format === "ONLINE") {
-    return `
-      <div style="background-color: #f0f9ff; border: 1px solid #0284c7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-        <p style="margin: 0; color: #0284c7;">
-          <strong>📹 Consultation en ligne</strong><br>
-          Vous recevrez le lien de connexion 1 heure avant le rendez-vous.
-        </p>
-      </div>
-    `;
-  } else {
-    return `
-      <div style="background-color: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; padding: 15px; margin: 20px 0;">
-        <p style="margin: 0; color: #16a34a;">
-          <strong>🏥 Consultation en personne</strong><br>
-          <strong>Date:</strong> ${startTime}<br>
-          <strong>Adresse:</strong> ${EMAIL_CONFIG.OFFICE_NAME}<br>
-          ${EMAIL_CONFIG.OFFICE_ADDRESS}
-        </p>
-      </div>
-    `;
-  }
-};
-
-/**
  * Email footer that appears in all emails
  */
 const generateEmailFooter = (): string => {
@@ -146,7 +116,6 @@ const generateEmailFooter = (): string => {
 export const ConfirmationEmailTemplate = {
   generate(appointment: Appointment): EmailTemplate {
     const startTime = formatAppointmentDate(appointment.startTime);
-    const appointmentInfo = generateAppointmentInfoBox(appointment, startTime);
     const meetingLink =
       appointment.format === "ONLINE"
         ? generateAppointmentButton(appointment, "Rejoindre la consultation")
@@ -160,7 +129,6 @@ export const ConfirmationEmailTemplate = {
           <p>Bonjour ${appointment.client.firstName},</p>
           <p>Votre rendez-vous a été confirmé pour le <strong>${startTime}</strong>.</p>
           
-          ${appointmentInfo}
           ${meetingLink}
           
           <div style="min-height: 100px;"></div>
@@ -206,10 +174,6 @@ export const RecurringSeriesConfirmationEmailTemplate = {
       .join("");
 
     const hasMore = appointments.length > 5;
-    const appointmentFormatInfo = generateAppointmentInfoBox(
-      firstAppointment,
-      ""
-    );
 
     // Generate meeting link for first appointment with day/time info
     let meetingLinkSection = "";
@@ -249,7 +213,6 @@ export const RecurringSeriesConfirmationEmailTemplate = {
             </ul>
           </div>
 
-          ${appointmentFormatInfo}
           ${meetingLinkSection}
 
           <div style="background-color: #fef9e7; border: 1px solid ${EMAIL_CONFIG.COLORS.WARNING_ORANGE}; border-radius: 8px; padding: 15px; margin: 20px 0;">
@@ -274,7 +237,6 @@ export const RecurringSeriesConfirmationEmailTemplate = {
 export const TwentyFourHourReminderEmailTemplate = {
   generate(appointment: Appointment): EmailTemplate {
     const startTime = formatAppointmentDate(appointment.startTime);
-    const appointmentInfo = generateAppointmentInfoBox(appointment, startTime);
 
     return {
       subject: "Rappel: Rendez-vous demain",
@@ -284,7 +246,6 @@ export const TwentyFourHourReminderEmailTemplate = {
           <p>Bonjour ${appointment.client.firstName},</p>
           <p>Nous vous rappelons votre rendez-vous prévu demain le <strong>${startTime}</strong>.</p>
           
-          ${appointmentInfo}
           
           ${generateEmailFooter()}
         </div>
@@ -384,7 +345,6 @@ export const RescheduleNotificationEmailTemplate = {
   generate(appointment: Appointment, oldStartTime: Date): EmailTemplate {
     const newTime = formatAppointmentDate(appointment.startTime);
     const oldTime = formatAppointmentDate(oldStartTime);
-    const appointmentInfo = generateAppointmentInfoBox(appointment, newTime);
 
     return {
       subject: "Modification de votre rendez-vous",
@@ -400,8 +360,6 @@ export const RescheduleNotificationEmailTemplate = {
               <strong>Nouveau créneau:</strong> ${newTime}
             </p>
           </div>
-
-          ${appointmentInfo}
           
           ${generateEmailFooter()}
         </div>

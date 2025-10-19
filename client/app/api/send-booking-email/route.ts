@@ -36,16 +36,16 @@ export async function POST(request: Request) {
     // Create email content
     const emailContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2>🗓️ Nouvelle demande de rendez-vous</h2>
+        <h2>Nouvelle demande de rendez-vous</h2>
         
-        <h3>📋 Informations du client :</h3>
+        <h3>Informations du client :</h3>
         <ul>
           <li><strong>Nom complet :</strong> ${firstName} ${lastName}</li>
           <li><strong>Email :</strong> ${email}</li>
           <li><strong>Téléphone :</strong> ${phone}</li>
         </ul>
 
-        <h3>📅 Détails du rendez-vous :</h3>
+        <h3>Détails du rendez-vous :</h3>
         <ul>
           <li><strong>Date souhaitée :</strong> ${formattedDate}</li>
           <li><strong>Heure souhaitée :</strong> ${time}</li>
@@ -53,39 +53,11 @@ export async function POST(request: Request) {
         </ul>
 
         <hr style="margin: 30px 0;">
-        
-        <h3 style="color: #2563eb;">📧 Actions rapides - Templates disponibles :</h3>
-        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px;">
-          <p><strong>Pour répondre rapidement au client, vous pouvez utiliser :</strong></p>
-          
-          <div style="margin: 10px 0;">
-            <h4 style="margin: 10px 0 5px 0; color: #059669;">✅ Template de Confirmation</h4>
-            <p style="margin: 5px 0; font-size: 14px;">Pour confirmer le rendez-vous avec les détails du cabinet</p>
-            <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 12px;">
-              POST /api/send-template-email<br>
-              { "templateType": "confirmation", "clientEmail": "${email}", "firstName": "${firstName}", "lastName": "${lastName}", "date": "${new Date(date).toISOString()}", "time": "${time}" }
-            </code>
-          </div>
-          
-          <div style="margin: 10px 0;">
-            <h4 style="margin: 10px 0 5px 0; color: #f59e0b;">📅 Template de Reprogrammation</h4>
-            <p style="margin: 5px 0; font-size: 14px;">Pour proposer de nouveaux créneaux</p>
-            <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 12px;">
-              POST /api/send-template-email<br>
-              { "templateType": "reschedule", "clientEmail": "${email}", ... }
-            </code>
-          </div>
-          
-          <div style="margin: 10px 0;">
-            <h4 style="margin: 10px 0 5px 0; color: #dc2626;">❌ Template d'Annulation</h4>
-            <p style="margin: 5px 0; font-size: 14px;">Pour annuler le rendez-vous</p>
-            <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 12px;">
-              POST /api/send-template-email<br>
-              { "templateType": "cancellation", "clientEmail": "${email}", ... }
-            </code>
-          </div>
-        </div>
-
+        <a href="https://dashboard-appointment-website.vercel.app/approvals">
+          <button style="background-color: #2563eb; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">
+            Confirmer le rendez-vous
+          </button>
+        </a>
         <hr style="margin: 20px 0;">
         <p style="font-size: 14px; color: #6b7280;"><em>Cette demande a été soumise depuis le formulaire de prise de rendez-vous du site web.</em></p>
       </div>
