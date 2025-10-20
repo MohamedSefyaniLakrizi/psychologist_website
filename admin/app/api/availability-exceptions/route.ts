@@ -45,6 +45,21 @@ export async function POST(request: NextRequest) {
 
   // Check if it's a bulk operation
   if (body.dates && Array.isArray(body.dates)) {
+    // If slots are provided, apply them to each date
+    if (body.slots && Array.isArray(body.slots) && body.slots.length > 0) {
+      for (const dateStr of body.dates) {
+        const result = await setDateAvailability({
+          date: new Date(dateStr),
+          slots: body.slots,
+        });
+        if (!result.success) {
+          return NextResponse.json({ error: result.error }, { status: 500 });
+        }
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    // If no slots, it's a vacation/closed dates operation
     const dates = body.dates.map((d: string) => new Date(d));
     const result = await bulkSetDateAvailability(dates, body.closed || false);
     if (!result.success) {
