@@ -13,7 +13,7 @@ import { startOfMonth, endOfMonth, addMonths } from "date-fns";
 async function getCalendarData() {
   const currentDate = new Date();
   const startDate = startOfMonth(addMonths(currentDate, -1));
-  const endDate = endOfMonth(addMonths(currentDate, 2));
+  const endDate = endOfMonth(addMonths(currentDate, 12));
 
   // Always fetch fresh data - timestamp ensures cache busting
   const timestamp = Date.now();
