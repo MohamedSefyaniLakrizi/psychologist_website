@@ -14,6 +14,9 @@ export async function GET(
       where: {
         clientId,
         confirmed: true,
+        client: {
+          deleted: false,
+        },
       },
       orderBy: { startTime: "desc" },
     });

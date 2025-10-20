@@ -313,7 +313,9 @@ export async function checkAvailability(
     }
 
     const conflictingAppointments = await prisma.appointment.findMany({
-      where: appointmentWhere,
+      where: {
+        AND: [appointmentWhere, { client: { deleted: false } }],
+      },
       include: { client: true },
     });
 

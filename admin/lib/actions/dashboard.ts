@@ -292,6 +292,7 @@ export async function getTodayAppointments(): Promise<TodayAppointment[]> {
         status: {
           not: "CANCELLED",
         },
+        client: { deleted: false },
       },
       include: {
         client: {
@@ -342,6 +343,7 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
         createdAt: {
           gte: subMonths(new Date(), 1),
         },
+        client: { deleted: false },
       },
       include: {
         client: {

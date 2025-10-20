@@ -23,6 +23,10 @@ export async function getAppointments(): Promise<IEvent[]> {
     const appointments: any[] = await (prisma as any).appointment.findMany({
       where: {
         confirmed: true,
+        // Exclude appointments for clients that were soft-deleted
+        client: {
+          deleted: false,
+        },
       },
       include: {
         client: true,
@@ -119,9 +123,10 @@ export async function updateAppointmentStatus(
 
 export async function getClients(): Promise<IUser[]> {
   try {
-    const clients: any[] = await (prisma as any).client.findMany({
+    const clients = await prisma.client.findMany({
       where: {
         confirmed: true,
+        deleted: false, // Exclude soft-deleted clients
       },
       orderBy: {
         firstName: "asc",
