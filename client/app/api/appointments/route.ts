@@ -234,6 +234,7 @@ export async function GET(request: Request) {
     const appointments = await prisma.appointment.findMany({
       where: {
         confirmed: false, // Only unconfirmed appointments for admin review
+        client: { deleted: false },
       },
       include: {
         client: true,

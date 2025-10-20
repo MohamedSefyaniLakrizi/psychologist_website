@@ -596,6 +596,7 @@ export async function updateAppointment(
             {
               where: {
                 recurrentId: originalAppointment.recurrentId,
+                client: { deleted: false },
               },
             }
           );
@@ -826,6 +827,7 @@ export async function getUpcomingOnlineAppointments(): Promise<IEvent[]> {
         startTime: {
           gte: oneDayAgo,
         },
+        client: { deleted: false },
       },
       include: {
         client: true,

@@ -22,12 +22,13 @@ export async function getPendingClients() {
   }
 }
 
-// Get pending appointments (not confirmed)
+// Get pending appointments (not confirmed, and clients not deleted)
 export async function getPendingAppointments() {
   try {
     const appointments = await prisma.appointment.findMany({
       where: {
         confirmed: false,
+        client: { deleted: false },
       },
       include: {
         client: true,

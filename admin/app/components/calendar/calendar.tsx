@@ -15,6 +15,9 @@ async function getCalendarData() {
   const startDate = startOfMonth(addMonths(currentDate, -1));
   const endDate = endOfMonth(addMonths(currentDate, 2));
 
+  // Add cache buster to prevent stale data in production
+  const cacheKey = `calendar-${Date.now()}`;
+
   const [eventsResult, usersResult, weeklyResult, dateResult] =
     await Promise.all([
       getAppointments(),
@@ -28,11 +31,12 @@ async function getCalendarData() {
     users: usersResult,
     weeklyAvailability: weeklyResult.success ? weeklyResult.data : [],
     dateAvailability: dateResult.success ? dateResult.data : [],
+    cacheKey, // Include for debugging
   };
 }
 
 export async function Calendar() {
-  const { events, users, weeklyAvailability, dateAvailability } =
+  const { events, users, weeklyAvailability, dateAvailability, cacheKey } =
     await getCalendarData();
 
   return (
@@ -42,6 +46,7 @@ export async function Calendar() {
       view="month"
       weeklyAvailability={weeklyAvailability}
       dateAvailability={dateAvailability}
+      key={cacheKey}
     >
       <DndProvider showConfirmation={false}>
         <div className="h-full w-full border rounded-xl">
