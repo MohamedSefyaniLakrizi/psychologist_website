@@ -26,6 +26,24 @@ export interface Appointment {
 }
 
 /**
+ * Helper function to get French text for recurring type
+ */
+const getFrequencyText = (
+  recurringType?: "WEEKLY" | "BIWEEKLY" | "MONTHLY"
+): string => {
+  switch (recurringType) {
+    case "WEEKLY":
+      return "hebdomadaire";
+    case "BIWEEKLY":
+      return "bimensuel";
+    case "MONTHLY":
+      return "mensuel";
+    default:
+      return "";
+  }
+};
+
+/**
  * Configuration constants that can be easily customized
  */
 export const EMAIL_CONFIG = {
@@ -116,13 +134,20 @@ const generateEmailFooter = (): string => {
 export const ConfirmationEmailTemplate = {
   generate(appointment: Appointment): EmailTemplate {
     const startTime = formatAppointmentDate(appointment.startTime);
+    const subjectDate = format(
+      new Date(appointment.startTime),
+      "dd/MM/yyyy HH:mm",
+      {
+        locale: fr,
+      }
+    );
     const meetingLink =
       appointment.format === "ONLINE"
         ? generateAppointmentButton(appointment, "Rejoindre la consultation")
         : "";
 
     return {
-      subject: "Confirmation de votre rendez-vous",
+      subject: `Confirmation de votre rendez-vous - ${subjectDate}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: ${EMAIL_CONFIG.COLORS.PRIMARY_BLUE}; margin-bottom: 20px;">Confirmation de votre rendez-vous</h2>
@@ -149,78 +174,58 @@ export const RecurringSeriesConfirmationEmailTemplate = {
     const formatText =
       firstAppointment.format === "ONLINE" ? "en ligne" : "en présentiel";
 
-    // Determine frequency based on recurringType
-    let frequencyText = "réguliers";
-    if (firstAppointment.recurringType) {
-      switch (firstAppointment.recurringType) {
-        case "WEEKLY":
-          frequencyText = "hebdomadaires";
-          break;
-        case "BIWEEKLY":
-          frequencyText = "bimensuels";
-          break;
-        case "MONTHLY":
-          frequencyText = "mensuels";
-          break;
-      }
+    // Get frequency text
+    const frequencyText = getFrequencyText(firstAppointment.recurringType);
+
+    // Get day of week in French
+    const dayOfWeek = format(new Date(firstAppointment.startTime), "EEEE", {
+      locale: fr,
+    });
+    const time = format(new Date(firstAppointment.startTime), "HH:mm", {
+      locale: fr,
+    });
+    const subjectDate = format(
+      new Date(firstAppointment.startTime),
+      "dd/MM/yyyy HH:mm",
+      { locale: fr }
+    );
+
+    // Build frequency description
+    let frequencyDescription = "";
+    switch (firstAppointment.recurringType) {
+      case "WEEKLY":
+        frequencyDescription = `chaque semaine le ${dayOfWeek} à ${time}`;
+        break;
+      case "BIWEEKLY":
+        frequencyDescription = `toutes les deux semaines le ${dayOfWeek} à ${time}`;
+        break;
+      case "MONTHLY":
+        frequencyDescription = `1 fois par mois le ${dayOfWeek} à ${time}`;
+        break;
+      default:
+        frequencyDescription = `régulièrement le ${dayOfWeek} à ${time}`;
     }
 
-    const appointmentsList = appointments
-      .slice(0, 5)
-      .map((apt) => {
-        const date = formatAppointmentDate(apt.startTime);
-        return `<li style="margin-bottom: 8px;">${date}</li>`;
-      })
-      .join("");
-
-    const hasMore = appointments.length > 5;
-
-    // Generate meeting link for first appointment with day/time info
-    let meetingLinkSection = "";
-    if (firstAppointment.format === "ONLINE") {
-      const firstAppointmentTime = formatAppointmentDate(
-        firstAppointment.startTime
-      );
-      const endTime = format(new Date(firstAppointment.endTime), "HH:mm", {
-        locale: fr,
-      });
-      meetingLinkSection = `
-        <div style="background-color: #f0f9ff; border: 1px solid #0284c7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <p style="margin: 0 0 10px 0; color: #0284c7;">
-            <strong>📹 Lien de connexion pour votre première consultation</strong>
-          </p>
-          <p style="margin: 0 0 10px 0; color: #0284c7; font-size: 14px;">
-            ${firstAppointmentTime}
-          </p>
-          ${generateAppointmentButton(firstAppointment, "Rejoindre la consultation")}
-        </div>
-      `;
-    }
+    // Generate meeting button only for ONLINE appointments
+    const meetingButton =
+      firstAppointment.format === "ONLINE"
+        ? generateAppointmentButton(
+            firstAppointment,
+            "Rejoindre la consultation"
+          )
+        : "";
 
     return {
-      subject: "Confirmation de votre série de rendez-vous",
+      subject: `Confirmation de Rendez-vous ${frequencyText} - ${subjectDate}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: ${EMAIL_CONFIG.COLORS.PRIMARY_BLUE}; margin-bottom: 20px;">Confirmation de votre série de rendez-vous</h2>
           <p>Bonjour ${firstAppointment.client.firstName},</p>
-          <p>Votre série de <strong>${appointments.length} rendez-vous ${frequencyText} ${formatText}</strong> a été confirmée.</p>
-          
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 20px 0;">
-            <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 16px;">📅 Vos prochains rendez-vous:</h3>
-            <ul style="margin: 0; padding-left: 20px; color: #475569;">
-              ${appointmentsList}
-              ${hasMore ? `<li style="margin-bottom: 8px; font-style: italic; color: #64748b;">... et ${appointments.length - 5} autres rendez-vous</li>` : ""}
-            </ul>
-          </div>
+          <p>Votre rendez-vous <strong>${frequencyDescription}</strong> ${formatText} a été confirmé pour une durée de ${appointments.length} séances.</p>
 
-          ${meetingLinkSection}
+          ${meetingButton}
 
-          <div style="background-color: #fef9e7; border: 1px solid ${EMAIL_CONFIG.COLORS.WARNING_ORANGE}; border-radius: 8px; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0; color: #92400e;">
-              <strong>ℹ️ Rappels automatiques</strong><br>
-              Vérifiez vos emails régulièrement ! Vous recevrez un rappel 24 heures avant et 1 heure avant chaque rendez-vous individuel avec ${firstAppointment.format === "ONLINE" ? "le lien de connexion" : "les détails de votre consultation"}.
-            </p>
-          </div>
+          <p style="margin-top: 20px; color: #475569;">Vous recevrez des rappels par email 24 heures avant et 1 heure avant chaque rendez-vous${firstAppointment.format === "ONLINE" ? " avec le lien de connexion" : ""}.</p>
           
           <div style="min-height: 100px;"></div>
           
@@ -237,12 +242,19 @@ export const RecurringSeriesConfirmationEmailTemplate = {
 export const TwentyFourHourReminderEmailTemplate = {
   generate(appointment: Appointment): EmailTemplate {
     const startTime = formatAppointmentDate(appointment.startTime);
+    const subjectDate = format(
+      new Date(appointment.startTime),
+      "dd/MM/yyyy HH:mm",
+      {
+        locale: fr,
+      }
+    );
 
     return {
-      subject: "Rappel: Rendez-vous demain",
+      subject: `Rappel: Rendez-vous demain - ${subjectDate}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: ${EMAIL_CONFIG.COLORS.ERROR_RED}; margin-bottom: 20px;">⏰ Rappel: Rendez-vous demain</h2>
+          <h2 style="color: ${EMAIL_CONFIG.COLORS.ERROR_RED}; margin-bottom: 20px;">Rappel: Rendez-vous demain</h2>
           <p>Bonjour ${appointment.client.firstName},</p>
           <p>Nous vous rappelons votre rendez-vous prévu demain le <strong>${startTime}</strong>.</p>
           
@@ -263,6 +275,13 @@ export const OneHourReminderEmailTemplate = {
       locale: fr,
     });
     const fullDateTime = formatAppointmentDate(appointment.startTime);
+    const subjectDate = format(
+      new Date(appointment.startTime),
+      "dd/MM/yyyy HH:mm",
+      {
+        locale: fr,
+      }
+    );
 
     let appointmentContent: string;
     if (appointment.format === "ONLINE") {
@@ -274,7 +293,7 @@ export const OneHourReminderEmailTemplate = {
       appointmentContent = `
         <div style="background-color: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; padding: 15px; margin: 20px 0;">
           <p style="margin: 0; color: #16a34a;">
-            <strong>🏥 Consultation en personne</strong><br>
+            <strong>Consultation en personne</strong><br>
             <strong>Date:</strong> ${fullDateTime}<br>
             <strong>Adresse:</strong> ${EMAIL_CONFIG.OFFICE_NAME}<br>
             ${EMAIL_CONFIG.OFFICE_ADDRESS}
@@ -284,7 +303,7 @@ export const OneHourReminderEmailTemplate = {
     }
 
     return {
-      subject: "Rappel: Rendez-vous dans 1 heure",
+      subject: `Rappel: Rendez-vous dans 1 heure - ${subjectDate}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: ${EMAIL_CONFIG.COLORS.ERROR_RED}; margin-bottom: 20px;">🚨 Rappel: Rendez-vous dans 1 heure</h2>
@@ -345,22 +364,40 @@ export const RescheduleNotificationEmailTemplate = {
   generate(appointment: Appointment, oldStartTime: Date): EmailTemplate {
     const newTime = formatAppointmentDate(appointment.startTime);
     const oldTime = formatAppointmentDate(oldStartTime);
+    const subjectDate = format(
+      new Date(appointment.startTime),
+      "dd/MM/yyyy HH:mm",
+      {
+        locale: fr,
+      }
+    );
+
+    // Generate meeting link/button only for ONLINE appointments
+    const meetingLinkSection =
+      appointment.format === "ONLINE"
+        ? generateAppointmentButton(
+            appointment,
+            "Rejoindre la nouvelle consultation"
+          )
+        : "";
 
     return {
-      subject: "Modification de votre rendez-vous",
+      subject: `Modification de votre rendez-vous - ${subjectDate}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: ${EMAIL_CONFIG.COLORS.PRIMARY_BLUE}; margin-bottom: 20px;">Modification de votre rendez-vous</h2>
           <p>Bonjour ${appointment.client.firstName},</p>
           <p>Votre rendez-vous a été modifié.</p>
-          
+
           <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin: 20px 0;">
             <p style="margin: 0;">
               <strong>Ancien créneau:</strong> ${oldTime}<br>
               <strong>Nouveau créneau:</strong> ${newTime}
             </p>
           </div>
-          
+
+          ${meetingLinkSection}
+
           ${generateEmailFooter()}
         </div>
       `,
@@ -374,9 +411,16 @@ export const RescheduleNotificationEmailTemplate = {
 export const CancellationEmailTemplate = {
   generate(appointment: Appointment): EmailTemplate {
     const cancelledTime = formatAppointmentDate(appointment.startTime);
+    const subjectDate = format(
+      new Date(appointment.startTime),
+      "dd/MM/yyyy HH:mm",
+      {
+        locale: fr,
+      }
+    );
 
     return {
-      subject: "Annulation de votre rendez-vous",
+      subject: `Annulation de votre rendez-vous - ${subjectDate}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: ${EMAIL_CONFIG.COLORS.ERROR_RED}; margin-bottom: 20px;">Annulation de votre rendez-vous</h2>

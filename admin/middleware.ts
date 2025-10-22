@@ -6,15 +6,6 @@ export default withAuth(
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token;
 
-    // Debug logging for Vercel logs
-    console.log(`🔍 Middleware: ${pathname}`);
-    console.log(`🔑 Token exists: ${!!token}`);
-    if (token) {
-      console.log(`📧 Token email: ${token.email}`);
-      console.log(`⏰ Token expires at: ${token.expiresAt}`);
-      console.log(`❌ Token error: ${token.error || "none"}`);
-    }
-
     // If token has error, force re-authentication
     if (token?.error === "RefreshAccessTokenError") {
       console.log(`🔄 Token refresh error, redirecting to login`);
@@ -80,12 +71,8 @@ export default withAuth(
       return NextResponse.redirect(loginUrl);
     }
 
-    // User has token - allow access to protected route
-    console.log(`✅ Token found, allowing access to: ${pathname}`);
-
     // Log authorized email check
     const authorizedEmail = process.env.AUTHORIZED_GOOGLE_EMAIL;
-    console.log(`🎯 Authorized email: ${authorizedEmail}`);
 
     if (token.email !== authorizedEmail) {
       console.log(`❌ UNAUTHORIZED: ${token.email} is not ${authorizedEmail}`);

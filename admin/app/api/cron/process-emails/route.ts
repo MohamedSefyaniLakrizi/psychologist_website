@@ -32,6 +32,7 @@ async function processEmails(request: NextRequest) {
         appointment: {
           include: {
             client: true,
+            invoice: true, // Include invoice for INVOICE_DELIVERY emails
           },
         },
       },

@@ -674,6 +674,86 @@ export async function updateAppointment(
           }
         );
 
+        // If appointment is online and times changed, regenerate Jitsi tokens and notify client
+        try {
+          if (updatedAppointment.format === "ONLINE") {
+            // regenerate tokens for the updated appointment
+            const client = await (prisma as any).client.findUnique({
+              where: { id: updatedAppointment.clientId },
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                sendInvoiceAutomatically: true,
+              },
+            });
+
+            if (client) {
+              const tokens = await generateJitsiTokensForAppointment(
+                `reschedule-${updatedAppointment.id}`,
+                `${client.firstName} ${client.lastName}`,
+                client.email,
+                new Date(updatedAppointment.startTime),
+                new Date(updatedAppointment.endTime)
+              );
+
+              await (prisma as any).appointment.update({
+                where: { id: updatedAppointment.id },
+                data: { hostJwt: tokens.hostJwt, clientJwt: tokens.clientJwt },
+              });
+
+              // Send reschedule notification email
+              try {
+                await EmailService.sendRescheduleEmail(
+                  {
+                    id: updatedAppointment.id,
+                    startTime: new Date(updatedAppointment.startTime),
+                    endTime: new Date(updatedAppointment.endTime),
+                    format: "ONLINE",
+                    clientJwt: tokens.clientJwt,
+                    client: {
+                      firstName: client.firstName,
+                      lastName: client.lastName,
+                      email: client.email,
+                    },
+                  },
+                  new Date(originalAppointment.startTime)
+                );
+
+                // Update scheduled emails for all appointments in the series
+                const seriesAppointments = await (
+                  prisma as any
+                ).appointment.findMany({
+                  where: {
+                    recurrentId: originalAppointment.recurrentId,
+                    client: { deleted: false },
+                  },
+                  select: { id: true, startTime: true, endTime: true },
+                });
+
+                for (const apt of seriesAppointments) {
+                  await EmailScheduler.rescheduleAppointmentEmails(
+                    apt.id,
+                    new Date(apt.startTime),
+                    new Date(apt.endTime),
+                    client.email,
+                    `${client.firstName} ${client.lastName}`,
+                    client.sendInvoiceAutomatically
+                  );
+                }
+
+                console.log(
+                  `✅ Rescheduled emails for ${seriesAppointments.length} appointments in series`
+                );
+              } catch (emailErr) {
+                console.error("Error sending reschedule email:", emailErr);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error handling reschedule notifications:", err);
+        }
+
         return {
           id: updatedAppointment.id,
           title: `${updatedAppointment.client.firstName} ${updatedAppointment.client.lastName}`,
@@ -705,6 +785,15 @@ export async function updateAppointment(
 
     // Update single appointment (default behavior)
     console.log("📝 Updating single appointment");
+
+    // Store original appointment data before update
+    const originalAppointmentForSingle: any = await (
+      prisma as any
+    ).appointment.findUnique({
+      where: { id },
+      include: { client: true },
+    });
+
     const appointment: any = await (prisma as any).appointment.update({
       where: { id },
       data,
@@ -714,6 +803,62 @@ export async function updateAppointment(
         invoice: true, // Include invoice to get payment status
       },
     });
+
+    // If appointment times changed, handle rescheduling
+    if (
+      (data.startTime &&
+        originalAppointmentForSingle.startTime.getTime() !==
+          data.startTime.getTime()) ||
+      (data.endTime &&
+        originalAppointmentForSingle.endTime.getTime() !==
+          data.endTime.getTime())
+    ) {
+      console.log("📅 Single appointment times changed, handling reschedule");
+
+      try {
+        // If online, regenerate Jitsi tokens
+        if (appointment.format === "ONLINE") {
+          const tokens = await generateJitsiTokensForAppointment(
+            `reschedule-${appointment.id}`,
+            `${appointment.client.firstName} ${appointment.client.lastName}`,
+            appointment.client.email,
+            new Date(appointment.startTime),
+            new Date(appointment.endTime)
+          );
+
+          await (prisma as any).appointment.update({
+            where: { id: appointment.id },
+            data: { hostJwt: tokens.hostJwt, clientJwt: tokens.clientJwt },
+          });
+
+          appointment.clientJwt = tokens.clientJwt;
+        }
+
+        // Send reschedule email
+        await EmailService.sendRescheduleEmail(
+          appointment,
+          originalAppointmentForSingle.startTime
+        );
+
+        // Update scheduled emails (cancel old and create new ones)
+        await EmailScheduler.rescheduleAppointmentEmails(
+          appointment.id,
+          new Date(appointment.startTime),
+          new Date(appointment.endTime),
+          appointment.client.email,
+          `${appointment.client.firstName} ${appointment.client.lastName}`,
+          appointment.client.sendInvoiceAutomatically
+        );
+
+        console.log("✅ Reschedule notifications sent for single appointment");
+      } catch (rescheduleErr) {
+        console.error(
+          "❌ Error handling reschedule for single appointment:",
+          rescheduleErr
+        );
+        // Don't fail the update if reschedule notifications fail
+      }
+    }
 
     return {
       id: appointment.id,
