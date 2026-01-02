@@ -91,7 +91,7 @@ export function FontFamilyToolbarPlugin() {
           </SelectContent>
         </Select>
       </TooltipTrigger>
-      <TooltipContent>Police d'écriture</TooltipContent>
+      <TooltipContent>Police d&apos;écriture</TooltipContent>
     </Tooltip>
   );
 }

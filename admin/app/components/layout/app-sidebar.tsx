@@ -23,6 +23,7 @@ import {
 } from "@/app/components/ui/sidebar";
 import Logout from "./sidebar/logout";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
@@ -40,9 +41,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="/">
+              <Link href="/" className="flex items-center space-x-2">
                 <span className="text-xl font-bold">Axion Labs</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

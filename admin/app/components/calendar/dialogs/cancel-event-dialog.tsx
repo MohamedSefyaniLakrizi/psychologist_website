@@ -87,8 +87,8 @@ export default function CancelEventDialog({
           <AlertDialogDescription asChild>
             <div className="space-y-4">
               <div className="text-foreground">
-                Vous êtes sur le point d'annuler ce rendez-vous. Un email de
-                confirmation sera envoyé au client.
+                Vous êtes sur le point d&apos;annuler ce rendez-vous. Un email
+                de confirmation sera envoyé au client.
               </div>
 
               <Separator />
@@ -101,8 +101,8 @@ export default function CancelEventDialog({
                       Notification envoyée
                     </p>
                     <p className="text-sm mt-1 text-red-700">
-                      Le client recevra un email d'annulation avec les détails
-                      du rendez-vous annulé.
+                      Le client recevra un email d&apos;annulation avec les
+                      détails du rendez-vous annulé.
                     </p>
                   </div>
                 </CardContent>

@@ -155,7 +155,7 @@ export function ElementFormatToolbarPlugin({
               <IndentDecreaseIcon className="size-4" />
             </ToggleGroupItem>
           </TooltipTrigger>
-          <TooltipContent>Réduire l'indentation</TooltipContent>
+          <TooltipContent>Réduire l&apos;indentation</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -169,7 +169,7 @@ export function ElementFormatToolbarPlugin({
               <IndentIncreaseIcon className="size-4" />
             </ToggleGroupItem>
           </TooltipTrigger>
-          <TooltipContent>Augmenter l'indentation</TooltipContent>
+          <TooltipContent>Augmenter l&apos;indentation</TooltipContent>
         </Tooltip>
       </ToggleGroup>
     </>
