@@ -12,6 +12,14 @@ import {
   X,
 } from "lucide-react";
 import NoteEditor from "@/app/components/notes/note-editor";
+import MeetingEditor from "../notes/meeting-editor";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "../ui/resizable";
+import type { ImperativePanelHandle } from "react-resizable-panels";
+import { cn } from "@/lib/utils";
 
 interface JitsiMeetingComponentProps {
   roomName: string;
@@ -43,6 +51,8 @@ export default function JitsiMeetingComponent({
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const notePanelRef = useRef<ImperativePanelHandle>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const domain = process.env.NEXT_PUBLIC_JITSI_DOMAIN;
 
@@ -211,7 +221,7 @@ export default function JitsiMeetingComponent({
   }
 
   return (
-    <div className="h-screen bg-background w-full relative flex">
+    <div className="h-full bg-background w-full relative flex">
       {/* Header - Hidden in fullscreen */}
       {!isFullscreen && (
         <div
@@ -240,7 +250,24 @@ export default function JitsiMeetingComponent({
               {showNotes && (
                 <Button
                   variant="outline"
-                  onClick={() => setIsNotesOpen(!isNotesOpen)}
+                  onClick={() => {
+                    if (notePanelRef.current.getSize() < 1) {
+                      setIsCollapsed(true);
+                      notePanelRef.current.expand();
+                      if (notePanelRef.current.getSize() < 1) {
+                        notePanelRef.current.resize(30);
+                      }
+                      setTimeout(() => {
+                        setIsCollapsed(false);
+                      }, 300);
+                    } else {
+                      setIsCollapsed(true);
+                      notePanelRef.current.collapse();
+                      setTimeout(() => {
+                        setIsCollapsed(false);
+                      }, 300);
+                    }
+                  }}
                   className="gap-2"
                   size="sm"
                   title={isNotesOpen ? "Fermer les notes" : "Ouvrir les notes"}
@@ -305,94 +332,95 @@ export default function JitsiMeetingComponent({
       {/* Main Content Area */}
       <div className="flex flex-1 h-full">
         {/* Jitsi Meeting Container */}
-        <div
-          ref={containerRef}
-          className={`${isFullscreen ? "h-full" : "pt-16 h-full"} relative transition-all duration-300 w-full flex-1`}
-        >
-          {/* Fullscreen Button - Always visible */}
-          <div
-            className={`${
-              isFullscreen
-                ? "absolute top-4 left-4 z-50"
-                : "absolute top-20 left-4 z-50"
-            }`}
-          >
-            <Button
-              variant="outline"
-              onClick={toggleFullscreen}
-              className="gap-2 bg-background/90 backdrop-blur-sm hover:bg-background/95"
-              size="sm"
-              title={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
+        <ResizablePanelGroup direction="horizontal">
+          <ResizablePanel defaultSize={100}>
+            <div
+              ref={containerRef}
+              className={`${isFullscreen ? "h-full" : "pt-16 h-full"} relative transition-all duration-300 w-full flex-1`}
             >
-              {isFullscreen ? (
-                <Minimize className="h-4 w-4" />
-              ) : (
-                <Maximize className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-
-          {/* Jitsi Meeting Wrapper */}
-          <div
-            className={`${
-              isFullscreen
-                ? "h-full"
-                : "my-2 mx-1 rounded-lg h-[calc(100%-16px)]"
-            } overflow-hidden`}
-          >
-            <JaaSMeeting
-              appId={process.env.NEXT_PUBLIC_JITSI_APP_ID || ""}
-              roomName={roomName}
-              jwt={jwt}
-              onApiReady={handleApiReady}
-              onReadyToClose={onLeaveMeeting}
-              getIFrameRef={(iframeRef) => {
-                if (iframeRef) {
-                  iframeRef.style.height = "100%";
-                  iframeRef.style.width = "100%";
-                }
-              }}
-              configOverwrite={{
-                startWithAudioMuted: false,
-                startWithVideoMuted: false,
-                enableWelcomePage: false,
-                prejoinPageEnabled: true,
-                defaultLanguage: "fr",
-              }}
-              interfaceConfigOverwrite={{
-                SHOW_JITSI_WATERMARK: false,
-                SHOW_WATERMARK_FOR_GUESTS: false,
-                DEFAULT_BACKGROUND: "#1a1a1a",
-                LANG_DETECTION: true,
-                DEFAULT_LANGUAGE: "fr",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Notes Panel */}
-        {showNotes && (
-          <div
-            className={`${
-              isNotesOpen ? "w-96" : "w-0"
-            } ${isFullscreen ? "hidden" : ""} border-l bg-background h-full transition-all duration-300 flex flex-col overflow-hidden`}
-          >
-            <div className="p-4 border-b flex items-center justify-between min-w-96">
-              <h3 className="font-semibold">Notes de consultation</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsNotesOpen(false)}
-                className="h-6 w-6 p-0"
+              {/* Fullscreen Button - Always visible */}
+              <div
+                className={`${
+                  isFullscreen
+                    ? "absolute top-4 left-4 z-50"
+                    : "absolute top-20 left-4 z-50"
+                }`}
               >
-                <X className="h-4 w-4" />
-              </Button>
+                <Button
+                  variant="outline"
+                  onClick={toggleFullscreen}
+                  className="gap-2 bg-background/90 backdrop-blur-sm hover:bg-background/95"
+                  size="sm"
+                  title={
+                    isFullscreen ? "Quitter le plein écran" : "Plein écran"
+                  }
+                >
+                  {isFullscreen ? (
+                    <Minimize className="h-4 w-4" />
+                  ) : (
+                    <Maximize className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+
+              {/* Jitsi Meeting Wrapper */}
+              <div
+                className={`${
+                  isFullscreen
+                    ? "h-full"
+                    : "my-2 mx-1 rounded-lg h-[calc(100%-16px)]"
+                } overflow-hidden`}
+              >
+                <JaaSMeeting
+                  appId={process.env.NEXT_PUBLIC_JITSI_APP_ID || ""}
+                  roomName={roomName}
+                  jwt={jwt}
+                  onApiReady={handleApiReady}
+                  onReadyToClose={onLeaveMeeting}
+                  getIFrameRef={(iframeRef) => {
+                    if (iframeRef) {
+                      iframeRef.style.height = "100%";
+                      iframeRef.style.width = "100%";
+                    }
+                  }}
+                  configOverwrite={{
+                    startWithAudioMuted: false,
+                    startWithVideoMuted: false,
+                    enableWelcomePage: false,
+                    prejoinPageEnabled: true,
+                    defaultLanguage: "fr",
+                  }}
+                  interfaceConfigOverwrite={{
+                    SHOW_JITSI_WATERMARK: false,
+                    SHOW_WATERMARK_FOR_GUESTS: false,
+                    DEFAULT_BACKGROUND: "#1a1a1a",
+                    LANG_DETECTION: true,
+                    DEFAULT_LANGUAGE: "fr",
+                  }}
+                />
+              </div>
             </div>
-            <div className="flex-1 p-4 overflow-hidden min-w-96">
-              <NoteEditor appointmentId={appointmentId} />
-            </div>
-          </div>
-        )}
+          </ResizablePanel>
+          <ResizableHandle />
+
+          {/* Notes Panel */}
+          {showNotes && (
+            <ResizablePanel
+              ref={notePanelRef}
+              collapsedSize={0}
+              defaultSize={0}
+              collapsible
+              className={cn(
+                isCollapsed ? "transition-all duration-300" : "",
+                "flex flex-col"
+              )}
+            >
+              <div className="flex-1 pt-20 pb-12 px-2 overflow-hidden min-w-96 w-full">
+                <MeetingEditor appointmentId={appointmentId} />
+              </div>
+            </ResizablePanel>
+          )}
+        </ResizablePanelGroup>
       </div>
     </div>
   );

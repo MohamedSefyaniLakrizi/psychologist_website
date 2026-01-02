@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateMeetingName } from "@/lib/jitsi";
+import { getTenantId } from "@/lib/actions/tenant";
 
 export async function POST(request: Request) {
   try {
+    const tenantId = await getTenantId();
     const body = await request.json();
     const { appointmentId, title } = body;
 
@@ -15,8 +17,8 @@ export async function POST(request: Request) {
     }
 
     // Try to find an existing note linked to this appointment
-    const existing = await (prisma as any).note.findFirst({
-      where: { appointmentId },
+    const existing = await prisma.note.findFirst({
+      where: { appointmentId, tenantId },
       select: { id: true },
     });
 
@@ -25,8 +27,8 @@ export async function POST(request: Request) {
     }
 
     // Find appointment to get clientId and appointment details (if any)
-    const appointment = await (prisma as any).appointment.findUnique({
-      where: { id: appointmentId },
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId, tenantId: tenantId },
       select: {
         clientId: true,
         startTime: true,
@@ -53,13 +55,14 @@ export async function POST(request: Request) {
       title: noteName,
       content: {},
       appointmentId,
+      tenantId: tenantId,
     };
 
     if (appointment?.clientId) {
       createData.clientId = appointment.clientId;
     }
 
-    const note = await (prisma as any).note.create({
+    const note = await prisma.note.create({
       data: createData,
       select: { id: true },
     });

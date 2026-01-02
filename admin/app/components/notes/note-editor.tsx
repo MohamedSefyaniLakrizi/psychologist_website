@@ -12,6 +12,7 @@ import {
   Calendar,
   SquarePen,
   MoreHorizontal,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -60,6 +61,7 @@ import {
 } from "@/app/components/ui/dropdown-menu";
 // Export libraries
 import { exportToPDF, exportToDOCX } from "@/lib/export-utils";
+import { debounce } from "lodash";
 
 interface NoteEditorProps {
   noteId?: string;
@@ -104,7 +106,7 @@ export default function NoteEditor({
     const fetchData = async () => {
       try {
         setIsLoading(true);
-
+        console.log("Fetching note data...", noteId);
         // If we have a noteId, fetch existing note
         if (noteId) {
           const [fetchedNote, fetchedClients, fetchedAppointments] =
@@ -113,13 +115,14 @@ export default function NoteEditor({
               getClientsForNotes(),
               getAppointments(),
             ]);
-
+          console.log("Fetched note:", fetchedNote);
           if (fetchedNote) {
             setNote(fetchedNote);
             setTitle(fetchedNote.title);
             setContent(fetchedNote.content);
           } else {
             toast.error("Note introuvable");
+            console.log("Note not found");
             return;
           }
 
@@ -177,6 +180,7 @@ export default function NoteEditor({
           setAppointments(fetchedAppointments);
           setTitle("Nouvelle note");
           setContent({});
+          console.log("Creating new note with default content");
         }
       } catch (error) {
         toast.error("Erreur lors du chargement de la note");
@@ -203,16 +207,19 @@ export default function NoteEditor({
 
   // Auto-save function with debouncing
   const autoSave = useCallback(async () => {
-    if (!content || !title) return;
+    console.log("Current content:", content);
+    console.log("Current title:", title);
+    if (!content) return;
 
     const currentContentString = JSON.stringify(content);
-    const titleString = title.trim();
+    const titleString = title.trim() || "Sans titre";
 
     // Check if content or title has actually changed
     if (
       currentContentString === lastSavedContentRef.current &&
       titleString === lastSavedTitleRef.current
     ) {
+      console.log("No changes detected, skipping auto-save.");
       setAutoSaveStatus("idle");
       return;
     }
@@ -222,6 +229,7 @@ export default function NoteEditor({
 
     try {
       let updatedNote;
+      console.log("Auto-saving note...");
 
       if (note?.id) {
         // Update existing note
@@ -264,7 +272,6 @@ export default function NoteEditor({
     // Skip if this is the initial load (content matches last saved)
     if (contentString === lastSavedContentRef.current) return;
 
-    setHasUnsavedChanges(true);
     setAutoSaveStatus("idle");
 
     // Clear existing timeout
@@ -292,7 +299,6 @@ export default function NoteEditor({
     if (title === lastSavedTitleRef.current || (note && title === note.title))
       return;
 
-    setHasUnsavedChanges(true);
     setAutoSaveStatus("idle");
 
     // Clear existing timeout
@@ -311,17 +317,6 @@ export default function NoteEditor({
       }
     };
   }, [title, autoSave, note]);
-
-  // Initialize last saved refs when note loads
-  useEffect(() => {
-    if (note && content) {
-      const currentContentString = JSON.stringify(content);
-      lastSavedContentRef.current = currentContentString;
-      lastSavedTitleRef.current = title;
-      setAutoSaveStatus("idle");
-      setHasUnsavedChanges(false);
-    }
-  }, [note?.id, content, note, title]);
 
   const handleSave = async () => {
     if (!content) return;
@@ -427,15 +422,18 @@ export default function NoteEditor({
   };
 
   const handleContentChange = useCallback(
-    (editorContent: { html: string; json: any; editor?: any }) => {
+    debounce((editorContent) => {
       setContent(editorContent.json);
       setHtmlContent(editorContent.html);
-    },
-    []
+      setHasUnsavedChanges(true);
+      autoSave();
+    }, 500),
+    [autoSave]
   );
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setTitle(newTitle);
+    setHasUnsavedChanges(true);
   }, []);
 
   const handleExportPDF = async () => {
@@ -514,7 +512,8 @@ export default function NoteEditor({
                     onClick={onClose}
                     className="gap-2"
                   >
-                    Fermer
+                    <ArrowLeft className="h-4 w-4" />
+                    Retour
                   </Button>
                 )}
               </div>

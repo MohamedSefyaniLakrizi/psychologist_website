@@ -6,17 +6,6 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export async function POST(request: NextRequest) {
   try {
     const { clientEmail, clientName, meetingUrl } = await request.json();
-    console.log(
-      "------------------ASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-------------"
-    );
-    console.log("SENDING EMAIL FROM API:", {
-      clientEmail,
-      clientName,
-      meetingUrl,
-    });
-    console.log(
-      "----------------AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaa--------------"
-    );
     // Validate required fields
     if (!clientEmail || !clientName || !meetingUrl) {
       return NextResponse.json(

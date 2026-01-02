@@ -5,6 +5,7 @@
 
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { getTenant, type TenantInfo } from "@/lib/actions/tenant";
 
 export interface EmailTemplate {
   html: string;
@@ -47,11 +48,6 @@ const getFrequencyText = (
  * Configuration constants that can be easily customized
  */
 export const EMAIL_CONFIG = {
-  FROM_EMAIL: "Malika Lkhabir <onboarding@resend.dev>",
-  DOCTOR_NAME: "Malika Lkhabir",
-  DOCTOR_TITLE: "Psychologue clinicienne",
-  OFFICE_NAME: "Cabinet Malika Lkhabir",
-  OFFICE_ADDRESS: "123 Rue de la Santé, 75014 Casablanca",
   WEBSITE_URL: process.env.WEBSITE_URL,
   COLORS: {
     PRIMARY_BLUE: "#2563eb",
@@ -61,6 +57,46 @@ export const EMAIL_CONFIG = {
     INFO_YELLOW: "#fef9e7",
     BORDER_LIGHT: "#e5e7eb",
   },
+};
+
+/**
+ * Get email sender info from tenant data
+ */
+export const getEmailFromInfo = (tenant: TenantInfo | null): string => {
+  if (!tenant) {
+    return "onboarding@resend.dev";
+  }
+  return `${tenant.firstName} ${tenant.lastName} <onboarding@resend.dev>`;
+};
+
+/**
+ * Get doctor/therapist full name from tenant
+ */
+export const getDoctorName = (tenant: TenantInfo | null): string => {
+  if (!tenant) {
+    return "Psychologue";
+  }
+  return `${tenant.firstName} ${tenant.lastName}`;
+};
+
+/**
+ * Get office name from tenant
+ */
+export const getOfficeName = (tenant: TenantInfo | null): string => {
+  if (!tenant) {
+    return "Cabinet";
+  }
+  return tenant.officeName;
+};
+
+/**
+ * Get office address from tenant
+ */
+export const getOfficeAddress = (tenant: TenantInfo | null): string => {
+  if (!tenant || !tenant.address) {
+    return "";
+  }
+  return tenant.address;
 };
 
 /**
@@ -113,12 +149,13 @@ const generateAppointmentButton = (
 /**
  * Email footer that appears in all emails
  */
-const generateEmailFooter = (): string => {
+const generateEmailFooter = (tenant: TenantInfo | null): string => {
+  const doctorName = getDoctorName(tenant);
   return `
     <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid ${EMAIL_CONFIG.COLORS.BORDER_LIGHT};">
-      <p style="margin: 0;">Cordialement,<br><strong>${EMAIL_CONFIG.DOCTOR_NAME}</strong></p>
+      <p style="margin: 0;">Cordialement,<br><strong>${doctorName}</strong></p>
       <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">
-        ${EMAIL_CONFIG.DOCTOR_TITLE}
+        Psychologue clinicienne
       </p>
     </div>
   `;
@@ -132,7 +169,8 @@ const generateEmailFooter = (): string => {
  * Confirmation Email - Sent when a single appointment is booked
  */
 export const ConfirmationEmailTemplate = {
-  generate(appointment: Appointment): EmailTemplate {
+  async generate(appointment: Appointment): Promise<EmailTemplate> {
+    const tenant = await getTenant();
     const startTime = formatAppointmentDate(appointment.startTime);
     const subjectDate = format(
       new Date(appointment.startTime),
@@ -158,7 +196,7 @@ export const ConfirmationEmailTemplate = {
           
           <div style="min-height: 100px;"></div>
           
-          ${generateEmailFooter()}
+          ${generateEmailFooter(tenant)}
         </div>
       `,
     };
@@ -169,7 +207,8 @@ export const ConfirmationEmailTemplate = {
  * Recurring Series Confirmation Email - Sent when multiple recurring appointments are booked
  */
 export const RecurringSeriesConfirmationEmailTemplate = {
-  generate(appointments: Appointment[]): EmailTemplate {
+  async generate(appointments: Appointment[]): Promise<EmailTemplate> {
+    const tenant = await getTenant();
     const firstAppointment = appointments[0];
     const formatText =
       firstAppointment.format === "ONLINE" ? "en ligne" : "en présentiel";
@@ -229,7 +268,7 @@ export const RecurringSeriesConfirmationEmailTemplate = {
           
           <div style="min-height: 100px;"></div>
           
-          ${generateEmailFooter()}
+          ${generateEmailFooter(tenant)}
         </div>
       `,
     };
@@ -240,7 +279,11 @@ export const RecurringSeriesConfirmationEmailTemplate = {
  * 24-Hour Reminder Email - Sent 24 hours before an appointment
  */
 export const TwentyFourHourReminderEmailTemplate = {
-  generate(appointment: Appointment): EmailTemplate {
+  async generate(
+    appointment: Appointment,
+    tenant?: TenantInfo | null
+  ): Promise<EmailTemplate> {
+    const tenantInfo = tenant ?? (await getTenant());
     const startTime = formatAppointmentDate(appointment.startTime);
     const subjectDate = format(
       new Date(appointment.startTime),
@@ -259,7 +302,7 @@ export const TwentyFourHourReminderEmailTemplate = {
           <p>Nous vous rappelons votre rendez-vous prévu demain le <strong>${startTime}</strong>.</p>
           
           
-          ${generateEmailFooter()}
+          ${generateEmailFooter(tenantInfo)}
         </div>
       `,
     };
@@ -270,7 +313,11 @@ export const TwentyFourHourReminderEmailTemplate = {
  * 1-Hour Reminder Email - Sent 1 hour before an appointment
  */
 export const OneHourReminderEmailTemplate = {
-  generate(appointment: Appointment): EmailTemplate {
+  async generate(
+    appointment: Appointment,
+    tenant?: TenantInfo | null
+  ): Promise<EmailTemplate> {
+    const tenantInfo = tenant ?? (await getTenant());
     const startTime = format(new Date(appointment.startTime), "HH:mm", {
       locale: fr,
     });
@@ -295,8 +342,8 @@ export const OneHourReminderEmailTemplate = {
           <p style="margin: 0; color: #16a34a;">
             <strong>Consultation en personne</strong><br>
             <strong>Date:</strong> ${fullDateTime}<br>
-            <strong>Adresse:</strong> ${EMAIL_CONFIG.OFFICE_NAME}<br>
-            ${EMAIL_CONFIG.OFFICE_ADDRESS}
+            <strong>Adresse:</strong> ${getOfficeName(tenantInfo)}<br>
+            ${getOfficeAddress(tenantInfo)}
           </p>
         </div>
       `;
@@ -314,7 +361,7 @@ export const OneHourReminderEmailTemplate = {
           
           <div style="min-height: 100px;"></div>
           
-          ${generateEmailFooter()}
+          ${generateEmailFooter(tenantInfo)}
         </div>
       `,
     };
@@ -325,7 +372,12 @@ export const OneHourReminderEmailTemplate = {
  * Invoice Email - Sent after an appointment to deliver invoice
  */
 export const InvoiceEmailTemplate = {
-  generate(appointment: Appointment, invoiceHtml: string): EmailTemplate {
+  async generate(
+    appointment: Appointment,
+    invoiceHtml: string,
+    tenant?: TenantInfo | null
+  ): Promise<EmailTemplate> {
+    const tenantInfo = tenant ?? (await getTenant());
     const appointmentDate = formatAppointmentDate(
       appointment.startTime,
       "dd MMMM yyyy"
@@ -350,7 +402,7 @@ export const InvoiceEmailTemplate = {
             </p>
           </div>
           
-          ${generateEmailFooter()}
+          ${generateEmailFooter(tenantInfo)}
         </div>
       `,
     };
@@ -361,7 +413,11 @@ export const InvoiceEmailTemplate = {
  * Appointment Reschedule Notification Email
  */
 export const RescheduleNotificationEmailTemplate = {
-  generate(appointment: Appointment, oldStartTime: Date): EmailTemplate {
+  async generate(
+    appointment: Appointment,
+    oldStartTime: Date
+  ): Promise<EmailTemplate> {
+    const tenant = await getTenant();
     const newTime = formatAppointmentDate(appointment.startTime);
     const oldTime = formatAppointmentDate(oldStartTime);
     const subjectDate = format(
@@ -398,7 +454,7 @@ export const RescheduleNotificationEmailTemplate = {
 
           ${meetingLinkSection}
 
-          ${generateEmailFooter()}
+          ${generateEmailFooter(tenant)}
         </div>
       `,
     };
@@ -409,7 +465,8 @@ export const RescheduleNotificationEmailTemplate = {
  * Appointment Cancellation Email
  */
 export const CancellationEmailTemplate = {
-  generate(appointment: Appointment): EmailTemplate {
+  async generate(appointment: Appointment): Promise<EmailTemplate> {
+    const tenant = await getTenant();
     const cancelledTime = formatAppointmentDate(appointment.startTime);
     const subjectDate = format(
       new Date(appointment.startTime),
@@ -434,7 +491,7 @@ export const CancellationEmailTemplate = {
             </p>
           </div>
           
-          ${generateEmailFooter()}
+          ${generateEmailFooter(tenant)}
         </div>
       `,
     };
@@ -444,17 +501,26 @@ export const CancellationEmailTemplate = {
 /**
  * Generic Notification Email Template
  */
+// Generic Notification Email Template
 export const GenericNotificationEmailTemplate = {
-  generate(clientName: string, title: string, message: string): EmailTemplate {
+  async generate(
+    client: { firstName: string; email: string },
+    subject: string,
+    message: string
+  ): Promise<EmailTemplate> {
+    const tenant = await getTenant();
     return {
-      subject: title,
+      subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: ${EMAIL_CONFIG.COLORS.PRIMARY_BLUE}; margin-bottom: 20px;">${title}</h2>
-          <p>Bonjour ${clientName},</p>
-          <p>${message}</p>
+          <h2 style="color: ${EMAIL_CONFIG.COLORS.PRIMARY_BLUE}; margin-bottom: 20px;">Notification</h2>
+          <p>Bonjour ${client.firstName},</p>
           
-          ${generateEmailFooter()}
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            ${message}
+          </div>
+          
+          ${generateEmailFooter(tenant)}
         </div>
       `,
     };

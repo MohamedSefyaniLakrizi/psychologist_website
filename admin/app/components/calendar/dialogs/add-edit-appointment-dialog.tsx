@@ -55,6 +55,7 @@ import {
   updateInvoice,
   type Invoice,
 } from "@/lib/actions/invoices";
+import { cancelAppointment } from "@/lib/actions/appointments";
 
 interface IProps {
   children: ReactNode;
@@ -124,6 +125,7 @@ export function AddEditAppointmentDialog({
       endTime: event ? formatTimeString(new Date(event.endDate)) : "10:00",
       rate: event?.rate ?? 300,
       format: event?.format ?? "ONLINE",
+      status: event?.status ?? "NOT_YET_ATTENDED",
       isRecurring: false,
       recurringType: undefined,
       recurringPeriod: undefined,
@@ -233,6 +235,20 @@ export function AddEditAppointmentDialog({
           startTime: startDateTime,
           endTime: endDateTime,
         };
+        console.log("current value", event.status);
+        console.log("new value", values.status);
+        // Check if status changed to CANCELLED and send cancellation email
+        if (values.status === "CANCELLED" && event.status !== "CANCELLED") {
+          try {
+            await cancelAppointment(event.id);
+            toast.success("Email d'annulation envoyé au client");
+          } catch (emailError) {
+            console.error("Error sending cancellation email:", emailError);
+            toast.warning(
+              "Rendez-vous annulé mais l'email n'a pas pu être envoyé"
+            );
+          }
+        }
 
         // For series editing, include time and day changes
         if (editMode === "series" && event.isRecurring) {
@@ -281,8 +297,11 @@ export function AddEditAppointmentDialog({
             newDay: selectedDayOfWeek,
           });
         } else {
-          // For single appointment editing, include format but not rate
+          // For single appointment editing, include format and status
           updateData.format = values.format;
+          if (values.status) {
+            updateData.status = values.status;
+          }
         }
 
         console.log("📊 Update data:", updateData);
@@ -322,7 +341,9 @@ export function AddEditAppointmentDialog({
           format: values.format,
           isRecurring: values.isRecurring || false,
           recurringType: values.isRecurring ? values.recurringType : undefined,
-          recurringEndDate,
+          recurringEndDate: values.isRecurring
+            ? values.recurringEndDate
+            : undefined,
         };
         console.log("📊 Final appointment data:", appointmentData);
         await addEvent(appointmentData);
@@ -650,6 +671,42 @@ export function AddEditAppointmentDialog({
                     </FormItem>
                   )}
                 />
+                {isEditing && (
+                  <FormField
+                    name="status"
+                    render={({ field, fieldState }) => (
+                      <FormItem>
+                        <FormLabel>Statut</FormLabel>
+                        <FormControl>
+                          <Select
+                            defaultValue={event.status}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger
+                              className={`w-full ${
+                                fieldState.invalid ? "border-red-500" : ""
+                              }`}
+                            >
+                              <SelectValue placeholder="Choisir le statut" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="NOT_YET_ATTENDED">
+                                À venir
+                              </SelectItem>
+                              <SelectItem value="ATTENDED">Effectué</SelectItem>
+                              <SelectItem value="ABSENT">
+                                Client absent
+                              </SelectItem>
+                              <SelectItem value="CANCELLED">Annulé</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </>
             ) : null}
 

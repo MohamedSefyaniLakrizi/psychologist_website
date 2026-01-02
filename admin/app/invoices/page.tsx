@@ -79,12 +79,15 @@ import {
   deleteInvoice,
   markInvoiceOverdue,
   markInvoiceEmailSent,
+  sendInvoiceEmailNow,
+  cancelInvoiceEmail,
   type Invoice,
   type CreateInvoiceData,
 } from "@/lib/actions/invoices";
 import { getClientsForNotes, type Client } from "@/lib/actions/notes";
 import { getAppointments } from "@/lib/actions/appointments";
 import { type IEvent } from "@/app/components/calendar/interfaces";
+import { getClient, getClients } from "@/lib/actions/clients";
 
 const statusColors = {
   UNPAID: "bg-yellow-100 text-yellow-800",
@@ -116,7 +119,9 @@ export default function InvoicesPage() {
 
   // New alert dialog state
   const [alertOpen, setAlertOpen] = useState(false);
-  const [alertMode, setAlertMode] = useState<"delete" | "email" | null>(null);
+  const [alertMode, setAlertMode] = useState<
+    "delete" | "email" | "scheduled" | null
+  >(null);
   const [targetInvoice, setTargetInvoice] = useState<Invoice | null>(null);
 
   // Form state
@@ -168,6 +173,12 @@ export default function InvoicesPage() {
         return;
       }
 
+      const { success, data: client } = await getClient(formData.clientId);
+      if (!success || !client) {
+        toast.error("Client introuvable");
+        return;
+      }
+
       const createData: CreateInvoiceData = {
         clientId: formData.clientId,
         amount: parseFloat(formData.amount),
@@ -177,6 +188,7 @@ export default function InvoicesPage() {
           formData.appointmentId && formData.appointmentId !== "none"
             ? formData.appointmentId
             : undefined,
+        emailStatus: client.sendInvoiceAutomatically ? "SCHEDULED" : "NOT_SENT",
       };
 
       await createInvoice(createData);
@@ -236,6 +248,13 @@ export default function InvoicesPage() {
     setAlertOpen(true);
   };
 
+  // Handle clicking on scheduled badge
+  const handleScheduledBadgeClick = (invoice: Invoice) => {
+    setTargetInvoice(invoice);
+    setAlertMode("scheduled");
+    setAlertOpen(true);
+  };
+
   // Confirm deletion (called from AlertDialog)
   const confirmDelete = async () => {
     if (!targetInvoice) return;
@@ -259,30 +278,45 @@ export default function InvoicesPage() {
     try {
       const loadingToast = toast.loading("Envoi de la facture par email...");
 
-      const response = await fetch("/api/send-invoice-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId: targetInvoice.id }),
-      });
+      await sendInvoiceEmailNow(targetInvoice.id);
 
       toast.dismiss(loadingToast);
-
-      if (response.ok) {
-        // Mark invoice as email sent
-        await markInvoiceEmailSent(targetInvoice.id);
-        toast.success("Facture envoyée par email avec succès");
-        fetchData(); // Refresh data to show updated email status
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || "Erreur lors de l'envoi de l'email");
-      }
+      toast.success("Facture envoyée par email avec succès");
 
       setAlertOpen(false);
       setTargetInvoice(null);
       setAlertMode(null);
+
+      fetchData(); // Refresh data to show updated email status
     } catch (error) {
       toast.error("Erreur lors de l'envoi de l'email");
       console.error("Error sending invoice email:", error);
+      setAlertOpen(false);
+      setTargetInvoice(null);
+      setAlertMode(null);
+    }
+  };
+
+  // Cancel scheduled invoice email
+  const confirmCancelEmail = async () => {
+    if (!targetInvoice) return;
+
+    try {
+      const loadingToast = toast.loading("Annulation de l'email programmé...");
+
+      await cancelInvoiceEmail(targetInvoice.id);
+
+      toast.dismiss(loadingToast);
+      toast.success("Email programmé annulé avec succès");
+
+      setAlertOpen(false);
+      setTargetInvoice(null);
+      setAlertMode(null);
+
+      fetchData(); // Refresh data to show updated email status
+    } catch (error) {
+      toast.error("Erreur lors de l'annulation de l'email");
+      console.error("Error cancelling invoice email:", error);
       setAlertOpen(false);
       setTargetInvoice(null);
       setAlertMode(null);
@@ -374,39 +408,74 @@ export default function InvoicesPage() {
 
   return (
     <div className="h-full w-full p-6 space-y-6">
-      {/* Alert Dialog used for both delete and email confirmation */}
+      {/* Alert Dialog used for delete, email confirmation, and scheduled email management */}
       <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <_AlertDialogTitle>
               {alertMode === "delete"
                 ? "Confirmer la suppression"
-                : "Confirmer l'envoi par email"}
+                : alertMode === "scheduled"
+                  ? "Gérer l'email programmé"
+                  : "Confirmer l'envoi par email"}
             </_AlertDialogTitle>
             <AlertDialogDescription>
               {alertMode === "delete"
                 ? `Êtes-vous sûr de vouloir supprimer la facture ${targetInvoice ? targetInvoice.id.slice(-8).toUpperCase() : ""} ? Cette action est irréversible.`
-                : `Voulez-vous envoyer la facture par email à ${targetInvoice?.client.firstName} ${targetInvoice?.client.lastName} (${targetInvoice?.client.email}) ?`}
+                : alertMode === "scheduled"
+                  ? `Cette facture a un email programmé pour ${targetInvoice?.client.firstName} ${targetInvoice?.client.lastName} (${targetInvoice?.client.email}). Que souhaitez-vous faire ?`
+                  : `Voulez-vous envoyer la facture par email à ${targetInvoice?.client.firstName} ${targetInvoice?.client.lastName} (${targetInvoice?.client.email}) ?`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setAlertOpen(false);
-                setTargetInvoice(null);
-                setAlertMode(null);
-              }}
-            >
-              Annuler
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                if (alertMode === "delete") await confirmDelete();
-                else if (alertMode === "email") await confirmEmail();
-              }}
-            >
-              Confirmer
-            </AlertDialogAction>
+            {alertMode === "scheduled" ? (
+              <>
+                <AlertDialogCancel
+                  onClick={() => {
+                    setAlertOpen(false);
+                    setTargetInvoice(null);
+                    setAlertMode(null);
+                  }}
+                >
+                  Fermer
+                </AlertDialogCancel>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    await confirmCancelEmail();
+                  }}
+                >
+                  Annuler l&apos;envoi programmé
+                </Button>
+                <AlertDialogAction
+                  onClick={async () => {
+                    await confirmEmail();
+                  }}
+                >
+                  Envoyer maintenant
+                </AlertDialogAction>
+              </>
+            ) : (
+              <>
+                <AlertDialogCancel
+                  onClick={() => {
+                    setAlertOpen(false);
+                    setTargetInvoice(null);
+                    setAlertMode(null);
+                  }}
+                >
+                  Annuler
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async () => {
+                    if (alertMode === "delete") await confirmDelete();
+                    else if (alertMode === "email") await confirmEmail();
+                  }}
+                >
+                  Confirmer
+                </AlertDialogAction>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -696,180 +765,220 @@ export default function InvoicesPage() {
           <CardTitle>Factures ({filteredInvoices.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead>Montant</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Email envoyé</TableHead>
-                <TableHead>Rendez-vous</TableHead>
-                <TableHead>Créée le</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInvoices.map((invoice) => {
-                const StatusIcon = statusIcons[invoice.status];
-                return (
-                  <TableRow key={invoice.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium">
-                            {invoice.client.firstName} {invoice.client.lastName}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {invoice.client.email}
-                          </div>
+          <TooltipProvider>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Montant</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>
+                    <Tooltip>
+                      <TooltipTrigger className="flex items-center gap-1 cursor-help">
+                        Email envoyé
+                        <AlertCircle className="h-3 w-3 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <div className="space-y-1">
+                          <p className="font-semibold">États possibles:</p>
+                          <p>
+                            <span className="text-green-600">● Envoyé</span> -
+                            Email déjà envoyé au client
+                          </p>
+                          <p>
+                            <span className="text-blue-600">● Programmé</span> -
+                            Email programmé pour envoi automatique
+                          </p>
+                          <p>
+                            <span className="text-gray-600">● Non envoyé</span>{" "}
+                            - Email pas encore envoyé
+                          </p>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono">
-                      {invoice.amount.toFixed(2)} Dh
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={statusColors[invoice.status]}>
-                        <StatusIcon className="h-3 w-3 mr-1" />
-                        {invoice.status === "UNPAID" && "Non payé"}
-                        {invoice.status === "PAID" && "Payé"}
-                        {invoice.status === "OVERDUE" && "En retard"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          invoice.emailSent
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }
-                      >
-                        {invoice.emailSent ? (
-                          <>
-                            <MailCheck className="h-3 w-3 mr-1" />
-                            Envoyé
-                          </>
-                        ) : (
-                          <>
-                            <MailX className="h-3 w-3 mr-1" />
-                            Non envoyé
-                          </>
-                        )}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {invoice.appointment ? (
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          <div className="text-sm">
-                            <div className="font-medium">
-                              {format(
-                                new Date(invoice.appointment.startTime),
-                                "dd/MM/yyyy",
-                                {
-                                  locale: fr,
-                                }
-                              )}
-                            </div>
-                            <div className="text-muted-foreground">
-                              {format(
-                                new Date(invoice.appointment.startTime),
-                                "HH:mm",
-                                {
-                                  locale: fr,
-                                }
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {format(new Date(invoice.createdAt), "dd/MM/yyyy", {
-                        locale: fr,
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <TooltipProvider>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead>Rendez-vous</TableHead>
+                  <TableHead>Créée le</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredInvoices.map((invoice) => {
+                  const StatusIcon = statusIcons[invoice.status];
+                  return (
+                    <TableRow key={invoice.id}>
+                      <TableCell>
                         <div className="flex items-center gap-2">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => generateInvoicePdf(invoice)}
-                              >
-                                <FileText className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Télécharger la facture PDF</p>
-                            </TooltipContent>
-                          </Tooltip>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEmailInvoice(invoice)}
-                                disabled={
-                                  !invoice.client.email || invoice.emailSent
-                                }
-                              >
-                                <Mail className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                {invoice.emailSent
-                                  ? "Facture déjà envoyée par email"
-                                  : "Envoyer par email au client"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => openEditDialog(invoice)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Modifier la facture</p>
-                            </TooltipContent>
-                          </Tooltip>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteInvoice(invoice)}
-                                className="text-red-600 hover:text-red-700"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Supprimer la facture</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <div className="font-medium">
+                              {invoice.client.firstName}{" "}
+                              {invoice.client.lastName}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {invoice.client.email}
+                            </div>
+                          </div>
                         </div>
-                      </TooltipProvider>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {invoice.amount.toFixed(2)} Dh
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={statusColors[invoice.status]}>
+                          <StatusIcon className="h-3 w-3 mr-1" />
+                          {invoice.status === "UNPAID" && "Non payé"}
+                          {invoice.status === "PAID" && "Payé"}
+                          {invoice.status === "OVERDUE" && "En retard"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            invoice.emailStatus === "SENT"
+                              ? "bg-green-100 text-green-800"
+                              : invoice.emailStatus === "SCHEDULED"
+                                ? "bg-blue-100 text-blue-800 cursor-pointer hover:bg-blue-200"
+                                : "bg-gray-100 text-gray-800"
+                          }
+                          onClick={() => {
+                            if (invoice.emailStatus === "SCHEDULED") {
+                              handleScheduledBadgeClick(invoice);
+                            }
+                          }}
+                        >
+                          {invoice.emailStatus === "SENT" ? (
+                            <>
+                              <MailCheck className="h-3 w-3 mr-1" />
+                              Envoyé
+                            </>
+                          ) : invoice.emailStatus === "SCHEDULED" ? (
+                            <>
+                              <Clock className="h-3 w-3 mr-1" />
+                              Programmé
+                            </>
+                          ) : (
+                            <>
+                              <MailX className="h-3 w-3 mr-1" />
+                              Non envoyé
+                            </>
+                          )}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {invoice.appointment ? (
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3 text-muted-foreground" />
+                            <div className="text-sm">
+                              <div className="font-medium">
+                                {format(
+                                  new Date(invoice.appointment.startTime),
+                                  "dd/MM/yyyy",
+                                  {
+                                    locale: fr,
+                                  }
+                                )}
+                              </div>
+                              <div className="text-muted-foreground">
+                                {format(
+                                  new Date(invoice.appointment.startTime),
+                                  "HH:mm",
+                                  {
+                                    locale: fr,
+                                  }
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {format(new Date(invoice.createdAt), "dd/MM/yyyy", {
+                          locale: fr,
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <div className="flex items-center gap-2">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => generateInvoicePdf(invoice)}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Télécharger la facture PDF</p>
+                              </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEmailInvoice(invoice)}
+                                  disabled={
+                                    !invoice.client.email ||
+                                    invoice.emailStatus === "SENT"
+                                  }
+                                >
+                                  <Mail className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>
+                                  {invoice.emailStatus === "SENT"
+                                    ? "Facture déjà envoyée par email"
+                                    : "Envoyer la facture par email maintenant"}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openEditDialog(invoice)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Modifier la facture</p>
+                              </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteInvoice(invoice)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Supprimer la facture</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipProvider>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TooltipProvider>
           {filteredInvoices.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               Aucune facture trouvée

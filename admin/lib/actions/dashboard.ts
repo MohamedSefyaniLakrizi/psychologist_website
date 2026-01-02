@@ -11,6 +11,7 @@ import {
   addDays,
 } from "date-fns";
 import { fr } from "date-fns/locale";
+import { getTenantId } from "./tenant";
 
 export interface DashboardStats {
   totalAppointments: number;
@@ -66,21 +67,23 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const now = new Date();
     const startOfCurrentMonth = startOfMonth(now);
     const endOfCurrentMonth = endOfMonth(now);
-
+    const tenantId = await getTenantId();
     // Total appointments this month
-    const totalAppointments = await (prisma as any).appointment.count({
+    const totalAppointments = await prisma.appointment.count({
       where: {
         startTime: {
           gte: startOfCurrentMonth,
           lte: endOfCurrentMonth,
         },
+        tenantId,
       },
     });
 
     // Total revenue (paid invoices)
-    const paidInvoices = await (prisma as any).invoice.findMany({
+    const paidInvoices = await prisma.invoice.findMany({
       where: {
         status: "PAID",
+        tenantId,
       },
       select: {
         amount: true,
@@ -95,6 +98,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const threeMonthsAgo = subMonths(now, 3);
     const activeClientsData = await (prisma as any).client.findMany({
       where: {
+        tenantId,
         appointments: {
           some: {
             startTime: {
@@ -109,6 +113,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     // Pending invoices amount
     const pendingInvoices = await (prisma as any).invoice.findMany({
       where: {
+        tenantId,
         status: {
           in: ["UNPAID", "OVERDUE"],
         },
@@ -126,6 +131,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const nextWeek = addDays(now, 7);
     const upcomingAppointments = await (prisma as any).appointment.count({
       where: {
+        tenantId,
         startTime: {
           gte: now,
           lte: nextWeek,
@@ -139,6 +145,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     // Overdue invoices count
     const overdueInvoices = await (prisma as any).invoice.count({
       where: {
+        tenantId,
         status: "OVERDUE",
       },
     });
@@ -168,6 +175,7 @@ export async function getMonthlyData(): Promise<MonthlyData[]> {
   try {
     const now = new Date();
     const monthlyData: MonthlyData[] = [];
+    const tenantId = await getTenantId();
 
     for (let i = 5; i >= 0; i--) {
       const month = subMonths(now, i);
@@ -177,6 +185,7 @@ export async function getMonthlyData(): Promise<MonthlyData[]> {
       // Count appointments for this month
       const appointments = await (prisma as any).appointment.count({
         where: {
+          tenantId,
           startTime: {
             gte: startOfMonthDate,
             lte: endOfMonthDate,
@@ -187,6 +196,7 @@ export async function getMonthlyData(): Promise<MonthlyData[]> {
       // Calculate revenue for this month (paid invoices)
       const invoices = await (prisma as any).invoice.findMany({
         where: {
+          tenantId,
           status: "PAID",
           paidAt: {
             gte: startOfMonthDate,
@@ -243,8 +253,12 @@ export async function getMonthlyData(): Promise<MonthlyData[]> {
 
 export async function getAppointmentStatusData(): Promise<AppointmentStatus[]> {
   try {
+    const tenantId = await getTenantId();
     const statusCounts = await (prisma as any).appointment.groupBy({
       by: ["status"],
+      where: {
+        tenantId,
+      },
       _count: {
         status: true,
       },
@@ -282,9 +296,11 @@ export async function getTodayAppointments(): Promise<TodayAppointment[]> {
     const now = new Date();
     const startOfToday = startOfDay(now);
     const endOfToday = endOfDay(now);
+    const tenantId = await getTenantId();
 
-    const appointments = await (prisma as any).appointment.findMany({
+    const appointments = await prisma.appointment.findMany({
       where: {
+        tenantId,
         startTime: {
           gte: startOfToday,
           lte: endOfToday,
@@ -336,10 +352,12 @@ export async function getTodayAppointments(): Promise<TodayAppointment[]> {
 export async function getRecentActivity(): Promise<RecentActivity[]> {
   try {
     const activities: RecentActivity[] = [];
+    const tenantId = await getTenantId();
 
     // Recent appointments (last 7 days)
     const recentAppointments = await (prisma as any).appointment.findMany({
       where: {
+        tenantId,
         createdAt: {
           gte: subMonths(new Date(), 1),
         },
@@ -372,6 +390,7 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
     // Recent invoices (last 7 days)
     const recentInvoices = await (prisma as any).invoice.findMany({
       where: {
+        tenantId,
         createdAt: {
           gte: subMonths(new Date(), 1),
         },
@@ -403,6 +422,7 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
     // Recent notes (last 7 days)
     const recentNotes = await (prisma as any).note.findMany({
       where: {
+        tenantId,
         createdAt: {
           gte: subMonths(new Date(), 1),
         },
@@ -445,7 +465,11 @@ export async function getRecentActivity(): Promise<RecentActivity[]> {
 
 export async function getTopClients(): Promise<TopClient[]> {
   try {
+    const tenantId = await getTenantId();
     const clients = await (prisma as any).client.findMany({
+      where: {
+        tenantId,
+      },
       include: {
         invoices: {
           where: {

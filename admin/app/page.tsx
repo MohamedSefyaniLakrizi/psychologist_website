@@ -32,6 +32,7 @@ import {
   QuickActionsCard,
   AlertsCard,
 } from "./components/dashboard/dashboard-cards";
+import { getTenant, TenantInfo } from "@/lib/actions/tenant";
 
 export default function DashboardPage() {
   const { status } = useSession();
@@ -51,6 +52,7 @@ export default function DashboardPage() {
   >([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [topClients, setTopClients] = useState<TopClient[]>([]);
+  const [tenant, setTenant] = useState<TenantInfo | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -84,7 +86,10 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     };
-
+    const fetchTenant = async () => {
+      setTenant(await getTenant());
+    };
+    fetchTenant();
     fetchDashboardData();
   }, []);
 
@@ -97,13 +102,14 @@ export default function DashboardPage() {
   }
 
   const formatCurrency = (amount: number) => `${amount.toFixed(2)} Dh`;
-
   return (
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-center px-4 py-6 flex-shrink-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tableau de Bord</h1>
-          <p className="text-muted-foreground">Bienvenue, Malika Lkhabir</p>
+          <p className="text-muted-foreground">
+            Bienvenue, {tenant?.firstName}
+          </p>
         </div>
         <Button
           variant="outline"

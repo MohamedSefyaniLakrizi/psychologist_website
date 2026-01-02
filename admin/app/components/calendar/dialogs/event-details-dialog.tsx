@@ -37,7 +37,7 @@ import {
 import { ScrollArea } from "@/app/components/ui/scroll-area";
 import { useCalendar } from "@/app/components/calendar/contexts/calendar-context";
 import { AddEditAppointmentDialog } from "@/app/components/calendar/dialogs/add-edit-appointment-dialog";
-import DeleteEventDialog from "@/app/components/calendar/dialogs/delete-event-dialog";
+import CancelEventDialog from "@/app/components/calendar/dialogs/cancel-event-dialog";
 import { formatTime } from "@/app/components/calendar/helpers";
 import type { IEvent } from "@/app/components/calendar/interfaces";
 import {
@@ -57,6 +57,13 @@ interface IProps {
   event: IEvent;
   children: ReactNode;
 }
+
+const status = {
+  NOT_YET_ATTENDED: "À venir",
+  ATTENDED: "Fait",
+  ABSENT: "Absent",
+  CANCELLED: "Annulé",
+};
 
 export function EventDetailsDialog({ event, children }: IProps) {
   const startDate = event.startDate;
@@ -160,29 +167,6 @@ export function EventDetailsDialog({ event, children }: IProps) {
     router.push(`/notes/${noteId}`);
   };
 
-  const handleStatusChange = async (
-    newStatus: "NOT_YET_ATTENDED" | "ATTENDED" | "ABSENT" | "CANCELLED"
-  ) => {
-    setIsUpdatingStatus(true);
-    try {
-      const updatedEvent = await updateAppointmentStatusAndPayment(
-        localEvent.id,
-        {
-          status: newStatus,
-        }
-      );
-      setLocalEvent(updatedEvent);
-      // Refresh the calendar to show updated colors across all views
-      await refreshEvents();
-      toast.success("Statut mis à jour avec succès");
-    } catch (error) {
-      console.error("Error updating status:", error);
-      toast.error("Erreur lors de la mise à jour du statut");
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  };
-
   const handlePaymentChange = async (paid: boolean) => {
     setIsUpdatingStatus(true);
     try {
@@ -273,21 +257,9 @@ export function EventDetailsDialog({ event, children }: IProps) {
               <div className="flex-1">
                 <p className="text-sm font-medium">Statut</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <Select
-                    value={localEvent.status || "NOT_YET_ATTENDED"}
-                    onValueChange={handleStatusChange}
-                    disabled={isUpdatingStatus}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="NOT_YET_ATTENDED">À venir</SelectItem>
-                      <SelectItem value="ATTENDED">Fait</SelectItem>
-                      <SelectItem value="ABSENT">Absent</SelectItem>
-                      <SelectItem value="CANCELLED">Annulé</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    {status[localEvent.status]}
+                  </p>
                 </div>
               </div>
             </div>
@@ -400,9 +372,9 @@ export function EventDetailsDialog({ event, children }: IProps) {
         </ScrollArea>
         <div className="flex justify-end gap-2">
           <AddEditAppointmentDialog event={localEvent}>
-            <Button variant="outline">Modifier</Button>
+            <Button>Modifier</Button>
           </AddEditAppointmentDialog>
-          <DeleteEventDialog
+          <CancelEventDialog
             event={localEvent}
             onSuccess={() => setIsOpen(false)}
           />

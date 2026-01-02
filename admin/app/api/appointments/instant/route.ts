@@ -3,11 +3,13 @@ import { PrismaClient } from "@prisma/client";
 import { generateJitsiTokensForAppointment } from "@/lib/jitsi";
 import { EmailScheduler } from "@/lib/services/email-scheduler";
 import { sendMeetingEmail } from "@/lib/services/meeting-email-service";
+import { getTenant, getTenantId } from "@/lib/actions/tenant";
 
 const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
+    const tenantId = await getTenantId();
     const { clientId, startTime, endTime, format, customRate } =
       await request.json();
 
@@ -23,6 +25,7 @@ export async function POST(request: NextRequest) {
     const client = await prisma.client.findUnique({
       where: {
         id: clientId,
+        tenantId: tenantId,
         confirmed: true,
         deleted: false, // Exclude soft-deleted clients
       },
@@ -58,6 +61,7 @@ export async function POST(request: NextRequest) {
     const appointment = await prisma.appointment.create({
       data: {
         clientId,
+        tenantId,
         startTime: new Date(startTime),
         endTime: new Date(endTime),
         format,
@@ -75,11 +79,13 @@ export async function POST(request: NextRequest) {
     await prisma.invoice.create({
       data: {
         clientId,
+        tenantId,
         appointmentId: appointment.id,
         amount: clientRate,
         status: "UNPAID",
         description: `Séance instantanée - ${new Date(startTime).toLocaleDateString("fr-FR")}`,
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+        emailStatus: client.sendInvoiceAutomatically ? "SCHEDULED" : "NOT_SENT",
       },
     });
 
@@ -100,9 +106,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate meeting URLs
+    const tenant = await getTenant();
     const baseUrl = process.env.WEBSITE_URL;
     const hostJoinUrl = hostJwt
-      ? `${baseUrl}/meeting/host?jwt=${hostJwt}&appointmentId=${appointment.id}&role=host&title=Rendez Vous&room=Rendez Vous&user=Malika Lkhabir`
+      ? `${baseUrl}/meeting/host?jwt=${hostJwt}&appointmentId=${appointment.id}&role=host&title=Rendez Vous&room=Rendez Vous&user=${tenant.officeName}&client=${client.firstName} ${client.lastName}`
       : null;
     const clientJoinUrl = clientJwt
       ? `${baseUrl}/meeting?jwt=${clientJwt}&appointmentId=${appointment.id}&role=client&title=Rendez Vous&room=Rendez Vous&user=${client.firstName} ${client.lastName}`

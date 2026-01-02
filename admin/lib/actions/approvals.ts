@@ -2,14 +2,17 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getTenantId } from "./tenant";
 
 // Get pending clients (not confirmed, not deleted)
 export async function getPendingClients() {
   try {
+    const tenantId = await getTenantId();
     const clients = await prisma.client.findMany({
       where: {
         confirmed: false,
         deleted: false, // Exclude soft-deleted clients
+        tenantId,
       },
       orderBy: {
         createdAt: "desc",
@@ -25,10 +28,12 @@ export async function getPendingClients() {
 // Get pending appointments (not confirmed, and clients not deleted)
 export async function getPendingAppointments() {
   try {
+    const tenantId = await getTenantId();
     const appointments = await prisma.appointment.findMany({
       where: {
         confirmed: false,
         client: { deleted: false },
+        tenantId,
       },
       include: {
         client: true,
@@ -47,8 +52,9 @@ export async function getPendingAppointments() {
 // Approve a client
 export async function approveClient(clientId: string) {
   try {
+    const tenantId = await getTenantId();
     await prisma.client.update({
-      where: { id: clientId },
+      where: { id: clientId, tenantId },
       data: { confirmed: true },
     });
     revalidatePath("/approvals");
@@ -62,8 +68,9 @@ export async function approveClient(clientId: string) {
 // Reject (delete) a client
 export async function rejectClient(clientId: string) {
   try {
+    const tenantId = await getTenantId();
     await prisma.client.delete({
-      where: { id: clientId },
+      where: { id: clientId, tenantId },
     });
     revalidatePath("/approvals");
     return { success: true };
@@ -76,8 +83,9 @@ export async function rejectClient(clientId: string) {
 // Approve an appointment
 export async function approveAppointment(appointmentId: string) {
   try {
+    const tenantId = await getTenantId();
     await prisma.appointment.update({
-      where: { id: appointmentId },
+      where: { id: appointmentId, tenantId },
       data: { confirmed: true },
     });
     revalidatePath("/approvals");
@@ -91,8 +99,9 @@ export async function approveAppointment(appointmentId: string) {
 // Reject (delete) an appointment
 export async function rejectAppointment(appointmentId: string) {
   try {
+    const tenantId = await getTenantId();
     await prisma.appointment.delete({
-      where: { id: appointmentId },
+      where: { id: appointmentId, tenantId },
     });
     revalidatePath("/approvals");
     return { success: true };

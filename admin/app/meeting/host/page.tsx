@@ -215,7 +215,7 @@ function HostMeetingPageContent() {
 
   // Only render the meeting component if everything is valid
   return (
-    <div className="relative w-full h-screen">
+    <div className="relative w-full h-full">
       <JitsiMeetingComponent
         roomName={jitsiConfig.roomName}
         userName={meetingInfo.userName}

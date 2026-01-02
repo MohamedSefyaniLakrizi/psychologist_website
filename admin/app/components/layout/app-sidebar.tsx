@@ -40,8 +40,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="#">
-                <span className="text-base font-semibold">Malika Lkhabir</span>
+              <a href="/">
+                <span className="text-xl font-bold">Axion Labs</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

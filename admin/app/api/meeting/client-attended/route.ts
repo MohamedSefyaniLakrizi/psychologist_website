@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getTenantId } from "@/lib/actions/tenant";
 
 export async function POST(request: NextRequest) {
   try {
+    const tenantId = await getTenantId();
     const { appointmentId, jwt } = await request.json();
     if (!appointmentId || !jwt) {
       return NextResponse.json(
@@ -12,8 +14,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the appointment and verify the JWT matches
-    const appointment = await (prisma as any).appointment.findUnique({
-      where: { id: appointmentId },
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId, tenantId: tenantId },
       select: {
         id: true,
         clientJwt: true,
@@ -53,8 +55,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Update clientAttended to true if not already set
-    const updatedAppointment = await (prisma as any).appointment.update({
-      where: { id: appointmentId },
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id: appointmentId, tenantId: tenantId },
       data: {
         clientAttended: true,
         // If host has already attended, set status to ATTENDED

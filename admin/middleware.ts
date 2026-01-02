@@ -5,7 +5,13 @@ export default withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token;
-
+    // Create the response
+    let response = NextResponse.next();
+    // Allow access to login page and auth routes
+    if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+      console.log(`🔓 Allowing access to auth routes: ${pathname}`);
+      return response;
+    }
     // If token has error, force re-authentication
     if (token?.error === "RefreshAccessTokenError") {
       console.log(`🔄 Token refresh error, redirecting to login`);
@@ -13,9 +19,6 @@ export default withAuth(
       loginUrl.searchParams.set("error", "SessionExpired");
       return NextResponse.redirect(loginUrl);
     }
-
-    // Create the response
-    let response = NextResponse.next();
 
     // Handle meeting pages - allow public access to /meeting but protect /meeting/host
     if (pathname.startsWith("/meeting/") && pathname !== "/meeting-room") {
@@ -54,12 +57,6 @@ export default withAuth(
     // Handle direct /meeting route - allow public access
     if (pathname === "/meeting") {
       console.log(`🌐 Allowing public access to /meeting`);
-      return response;
-    }
-
-    // Allow access to login page and auth routes
-    if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
-      console.log(`🔓 Allowing access to auth routes: ${pathname}`);
       return response;
     }
 

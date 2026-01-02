@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { getTenantId } from "@/lib/actions/tenant";
 
 const prisma = new PrismaClient();
 
 export async function POST() {
   try {
+    const tenantId = await getTenantId();
     // Get all pending INVOICE_DELIVERY emails that are scheduled for now or earlier
-    const pendingEmails = await (prisma.emailSchedule as any).findMany({
+    const pendingEmails = await prisma.emailSchedule.findMany({
       where: {
         emailType: "INVOICE_DELIVERY",
         status: "PENDING",

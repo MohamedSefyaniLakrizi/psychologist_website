@@ -93,10 +93,13 @@ export default function NotesPage() {
         title: "Nouvelle note",
         content: {
           root: {
-            children: [],
-            direction: null,
-            format: "",
-            indent: 0,
+            children: [
+              {
+                children: [{ text: "" }],
+                type: "paragraph",
+                version: 1,
+              },
+            ],
             type: "root",
             version: 1,
           },

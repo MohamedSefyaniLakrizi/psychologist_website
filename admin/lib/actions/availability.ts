@@ -2,12 +2,15 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getTenantId } from "./tenant";
 
 // ============= Weekly Availability Template =============
 
 export async function getWeeklyAvailability() {
   try {
+    const tenantId = await getTenantId();
     const availability = await prisma.weeklyAvailability.findMany({
+      where: { tenantId },
       orderBy: { weekday: "asc" },
     });
     return { success: true, data: availability };
@@ -23,11 +26,13 @@ export async function createWeeklyAvailability(data: {
   endTime: string;
 }) {
   try {
+    const tenantId = await getTenantId();
     const availability = await prisma.weeklyAvailability.create({
       data: {
         weekday: data.weekday,
         startTime: data.startTime,
         endTime: data.endTime,
+        tenantId,
       },
     });
     revalidatePath("/availability");
@@ -46,8 +51,9 @@ export async function updateWeeklyAvailability(
   }
 ) {
   try {
+    const tenantId = await getTenantId();
     const availability = await prisma.weeklyAvailability.update({
-      where: { id },
+      where: { id, tenantId },
       data,
     });
     revalidatePath("/availability");
@@ -60,8 +66,9 @@ export async function updateWeeklyAvailability(
 
 export async function deleteWeeklyAvailability(id: string) {
   try {
+    const tenantId = await getTenantId();
     await prisma.weeklyAvailability.delete({
-      where: { id },
+      where: { id, tenantId },
     });
     revalidatePath("/availability");
     return { success: true };
@@ -79,12 +86,13 @@ export async function bulkUpdateWeeklyAvailability(
   }>
 ) {
   try {
+    const tenantId = await getTenantId();
     // Delete all existing and recreate
-    await prisma.weeklyAvailability.deleteMany({});
+    await prisma.weeklyAvailability.deleteMany({ where: { tenantId } });
 
     if (slots.length > 0) {
       await prisma.weeklyAvailability.createMany({
-        data: slots,
+        data: slots.map((slot) => ({ ...slot, tenantId })),
       });
     }
 
@@ -103,8 +111,10 @@ export async function bulkUpdateWeeklyAvailability(
 
 export async function getDateAvailability(startDate: Date, endDate: Date) {
   try {
+    const tenantId = await getTenantId();
     const availability = await prisma.dateAvailability.findMany({
       where: {
+        tenantId,
         date: {
           gte: startDate,
           lte: endDate,
@@ -124,12 +134,13 @@ export async function setDateAvailability(data: {
   slots: Array<{ startTime: string; endTime: string }>;
 }) {
   try {
+    const tenantId = await getTenantId();
     const dateStr = new Date(data.date);
     dateStr.setHours(0, 0, 0, 0);
 
     // Delete existing slots for this date
     await prisma.dateAvailability.deleteMany({
-      where: { date: dateStr },
+      where: { date: dateStr, tenantId },
     });
 
     // If slots array is empty, it means the day is closed (no availability)
@@ -140,6 +151,7 @@ export async function setDateAvailability(data: {
           date: dateStr,
           startTime: slot.startTime,
           endTime: slot.endTime,
+          tenantId,
         })),
       });
     } else {
@@ -149,6 +161,7 @@ export async function setDateAvailability(data: {
           date: dateStr,
           startTime: null,
           endTime: null,
+          tenantId,
         },
       });
     }
@@ -163,13 +176,14 @@ export async function setDateAvailability(data: {
 
 export async function bulkSetDateAvailability(dates: Date[], closed: boolean) {
   try {
+    const tenantId = await getTenantId();
     for (const date of dates) {
       const dateStr = new Date(date);
       dateStr.setHours(0, 0, 0, 0);
 
       // Delete existing slots for this date
       await prisma.dateAvailability.deleteMany({
-        where: { date: dateStr },
+        where: { date: dateStr, tenantId },
       });
 
       if (closed) {
@@ -179,6 +193,7 @@ export async function bulkSetDateAvailability(dates: Date[], closed: boolean) {
             date: dateStr,
             startTime: null,
             endTime: null,
+            tenantId,
           },
         });
       }
@@ -197,9 +212,10 @@ export async function deleteDateAvailability(date: Date) {
   try {
     const dateStr = new Date(date);
     dateStr.setHours(0, 0, 0, 0);
+    const tenantId = await getTenantId();
 
     await prisma.dateAvailability.deleteMany({
-      where: { date: dateStr },
+      where: { date: dateStr, tenantId },
     });
 
     revalidatePath("/availability");
@@ -214,12 +230,13 @@ export async function deleteDateAvailability(date: Date) {
 
 export async function getAvailabilityForDate(date: Date) {
   try {
+    const tenantId = await getTenantId();
     const dateStr = new Date(date);
     dateStr.setHours(0, 0, 0, 0);
 
     // Check for date-specific availability first
     const dateAvailability = await prisma.dateAvailability.findMany({
-      where: { date: dateStr },
+      where: { date: dateStr, tenantId },
     });
 
     if (dateAvailability.length > 0) {
@@ -247,7 +264,7 @@ export async function getAvailabilityForDate(date: Date) {
     // Fall back to weekly template
     const dayOfWeek = (date.getDay() + 6) % 7; // Convert Sunday=0 to Monday=0
     const weeklyAvailability = await prisma.weeklyAvailability.findMany({
-      where: { weekday: dayOfWeek },
+      where: { weekday: dayOfWeek, tenantId },
       orderBy: { startTime: "asc" },
     });
 
@@ -271,6 +288,7 @@ export async function checkAvailability(
   excludeAppointmentId?: string
 ) {
   try {
+    const tenantId = await getTenantId();
     const startDate = new Date(startTime);
 
     // Get availability for this date
@@ -314,7 +332,7 @@ export async function checkAvailability(
 
     const conflictingAppointments = await prisma.appointment.findMany({
       where: {
-        AND: [appointmentWhere, { client: { deleted: false } }],
+        AND: [appointmentWhere, { client: { deleted: false }, tenantId }],
       },
       include: { client: true },
     });

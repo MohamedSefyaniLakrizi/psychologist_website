@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getTenantId } from "./tenant";
 
 export interface Note {
   id: string;
@@ -40,7 +41,11 @@ export interface ClientWithNotes {
 
 export async function getNotes(): Promise<Note[]> {
   try {
+    const tenantId = await getTenantId();
     const notes = await (prisma as any).note.findMany({
+      where: {
+        tenantId,
+      },
       include: {
         client: {
           select: {
@@ -70,8 +75,12 @@ export async function getNotes(): Promise<Note[]> {
 
 export async function getNote(id: string): Promise<Note | null> {
   try {
-    const note = await (prisma as any).note.findUnique({
-      where: { id },
+    const tenantId = await getTenantId();
+    const note = await (prisma as any).note.findFirst({
+      where: {
+        id,
+        tenantId,
+      },
       include: {
         client: {
           select: {
@@ -105,10 +114,13 @@ export async function createNote(data: {
   console.log("Creating note with data:", JSON.stringify(data, null, 2));
 
   try {
+    const tenantId = await getTenantId();
+
     // First try a simple create without includes to isolate the issue
     const createData: any = {
       title: data.title,
       content: data.content,
+      tenantId,
     };
 
     // Only add clientId if it's provided and not empty
@@ -150,17 +162,29 @@ export async function updateNote(
   id: string,
   data: {
     title?: string;
-    content?: any;
+    content?: JSON;
     clientId?: string;
     appointmentId?: string;
   }
 ): Promise<Note> {
   try {
-    const note = await (prisma as any).note.update({
-      where: { id },
+    const tenantId = await getTenantId();
+
+    await (prisma as any).note.updateMany({
+      where: {
+        id,
+        tenantId,
+      },
       data: {
         ...data,
         updatedAt: new Date(),
+      },
+    });
+
+    const note = await (prisma as any).note.findFirst({
+      where: {
+        id,
+        tenantId,
       },
       include: {
         client: {
@@ -179,6 +203,10 @@ export async function updateNote(
       },
     });
 
+    if (!note) {
+      throw new Error("Note not found after update");
+    }
+
     revalidatePath("/notes");
     revalidatePath(`/notes/${id}`);
     return note;
@@ -190,8 +218,12 @@ export async function updateNote(
 
 export async function deleteNote(id: string): Promise<void> {
   try {
-    await (prisma as any).note.delete({
-      where: { id },
+    const tenantId = await getTenantId();
+    await (prisma as any).note.deleteMany({
+      where: {
+        id,
+        tenantId,
+      },
     });
 
     revalidatePath("/notes");
@@ -203,8 +235,10 @@ export async function deleteNote(id: string): Promise<void> {
 
 export async function getClientsForNotes(): Promise<Client[]> {
   try {
+    const tenantId = await getTenantId();
     const clients = await (prisma as any).client.findMany({
       where: {
+        tenantId,
         confirmed: true,
       },
       select: {
@@ -230,6 +264,7 @@ export async function updateNoteClient(
   clientId: string | null
 ): Promise<Note> {
   try {
+    const tenantId = await getTenantId();
     const updateData: any = {};
 
     if (clientId === null || clientId === "") {
@@ -238,9 +273,19 @@ export async function updateNoteClient(
       updateData.clientId = clientId;
     }
 
-    const note = await (prisma as any).note.update({
-      where: { id },
+    await (prisma as any).note.updateMany({
+      where: {
+        id,
+        tenantId,
+      },
       data: updateData,
+    });
+
+    const note = await (prisma as any).note.findFirst({
+      where: {
+        id,
+        tenantId,
+      },
       include: {
         client: {
           select: {
@@ -258,6 +303,10 @@ export async function updateNoteClient(
       },
     });
 
+    if (!note) {
+      throw new Error("Note not found after update");
+    }
+
     revalidatePath("/notes");
     revalidatePath(`/notes/${id}`);
     return note;
@@ -269,8 +318,10 @@ export async function updateNoteClient(
 
 export async function getClientsWithNotes(): Promise<ClientWithNotes[]> {
   try {
+    const tenantId = await getTenantId();
     const clients = await (prisma as any).client.findMany({
       where: {
+        tenantId,
         confirmed: true,
       },
       include: {
@@ -321,8 +372,10 @@ export async function getNotesByAppointmentId(
   appointmentId: string
 ): Promise<Note[]> {
   try {
+    const tenantId = await getTenantId();
     const notes = await (prisma as any).note.findMany({
       where: {
+        tenantId,
         appointmentId: appointmentId,
       },
       include: {

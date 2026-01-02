@@ -383,7 +383,7 @@ export function AlertsCard({
                     Paiement en retard
                   </span>
                 </div>
-                <Badge variant="destructive" className="text-xs">
+                <Badge className="text-xs bg-red-100 text-red-500">
                   {overdueInvoices}
                 </Badge>
               </div>

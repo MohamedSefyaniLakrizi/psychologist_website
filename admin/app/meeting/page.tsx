@@ -289,7 +289,7 @@ function ClientMeetingPageContent() {
         <Card className="w-full max-w-lg">
           <CardContent className="space-y-6">
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold">Dr. Malika Lkhabir</h3>
+              <h3 className="text-lg font-semibold"></h3>
               <p className="text-muted-foreground">Psychologue clinicienne</p>
             </div>
 

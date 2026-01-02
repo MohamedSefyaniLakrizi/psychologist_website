@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 import { generateJitsiTokensForAppointment } from "@/lib/jitsi";
 import { EmailService } from "@/lib/services/email-service";
 import { EmailScheduler } from "@/lib/services/email-scheduler";
+import { getTenantId } from "./tenant";
 
 // Helper function to format appointment description in French
 function formatAppointmentDescription(
@@ -20,9 +21,11 @@ function formatAppointmentDescription(
 
 export async function getAppointments(): Promise<IEvent[]> {
   try {
-    const appointments: any[] = await (prisma as any).appointment.findMany({
+    const tenantId = await getTenantId();
+    const appointments: any[] = await prisma.appointment.findMany({
       where: {
         confirmed: true,
+        tenantId,
         // Exclude appointments for clients that were soft-deleted
         client: {
           deleted: false,
@@ -80,8 +83,9 @@ export async function updateAppointmentStatus(
   status: "NOT_YET_ATTENDED" | "ATTENDED" | "ABSENT" | "CANCELLED"
 ): Promise<IEvent> {
   try {
-    const appointment: any = await (prisma as any).appointment.update({
-      where: { id },
+    const tenantId = await getTenantId();
+    const appointment: any = await prisma.appointment.update({
+      where: { id, tenantId },
       data: { status },
       include: {
         client: true,
@@ -123,10 +127,12 @@ export async function updateAppointmentStatus(
 
 export async function getClients(): Promise<IUser[]> {
   try {
+    const tenantId = await getTenantId();
     const clients = await prisma.client.findMany({
       where: {
         confirmed: true,
         deleted: false, // Exclude soft-deleted clients
+        tenantId,
       },
       orderBy: {
         firstName: "asc",
@@ -209,20 +215,19 @@ export async function createAppointment(data: {
           // Generate Jitsi tokens for online appointments
           let hostJwt: string | undefined;
           let clientJwt: string | undefined;
+          const tenantId = await getTenantId();
+          const client = await prisma.client.findUnique({
+            where: { id: appointmentBaseData.clientId, tenantId },
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              sendInvoiceAutomatically: true,
+            },
+          });
 
           if (appointmentBaseData.format === "ONLINE") {
             console.log("🎥 Generating Jitsi tokens for online appointment");
-
-            // First get the client info for the token generation
-            const client = await (prisma as any).client.findUnique({
-              where: { id: appointmentBaseData.clientId },
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-                sendInvoiceAutomatically: true,
-              },
-            });
 
             if (client) {
               const clientName = `${client.firstName} ${client.lastName}`;
@@ -241,9 +246,10 @@ export async function createAppointment(data: {
             }
           }
 
-          const appointment = await (prisma as any).appointment.create({
+          const appointment = await prisma.appointment.create({
             data: {
               clientId: appointmentBaseData.clientId,
+              tenantId,
               startTime: new Date(currentDate),
               endTime: appointmentEndTime,
               format: appointmentBaseData.format,
@@ -276,9 +282,10 @@ export async function createAppointment(data: {
               `💳 Creating invoice for recurring appointment ${iteration + 1}:`,
               appointment.id
             );
-            await (prisma as any).invoice.create({
+            await prisma.invoice.create({
               data: {
                 clientId: appointment.clientId,
+                tenantId: tenantId,
                 appointmentId: appointment.id,
                 amount: appointmentBaseData.rate,
                 status: "UNPAID",
@@ -287,6 +294,9 @@ export async function createAppointment(data: {
                   new Date(appointment.startTime).getTime() +
                     30 * 24 * 60 * 60 * 1000
                 ), // 30 days from appointment
+                EmailSent: client.sendInvoiceAutomatically
+                  ? "SCHEDULED"
+                  : "NOT_SENT",
               },
             });
             console.log(
@@ -402,20 +412,19 @@ export async function createAppointment(data: {
       // Generate Jitsi tokens for online appointments
       let hostJwt: string | undefined;
       let clientJwt: string | undefined;
+      const tenantId = await getTenantId();
+      const client = await prisma.client.findUnique({
+        where: { id: data.clientId, tenantId },
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+          sendInvoiceAutomatically: true,
+        },
+      });
 
       if (data.format === "ONLINE") {
         console.log("🎥 Generating Jitsi tokens for online appointment");
-
-        // Get the client info for the token generation
-        const client = await (prisma as any).client.findUnique({
-          where: { id: data.clientId },
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-            sendInvoiceAutomatically: true,
-          },
-        });
 
         if (client) {
           const clientName = `${client.firstName} ${client.lastName}`;
@@ -434,6 +443,7 @@ export async function createAppointment(data: {
 
       const appointmentData = {
         clientId: data.clientId,
+        tenantId: tenantId,
         startTime: new Date(data.startTime),
         endTime: new Date(data.endTime),
         format: data.format,
@@ -449,7 +459,7 @@ export async function createAppointment(data: {
 
       console.log("📊 Single appointment data:", appointmentData);
 
-      const appointment = await (prisma as any).appointment.create({
+      const appointment = await prisma.appointment.create({
         data: appointmentData,
         include: {
           client: true,
@@ -462,14 +472,18 @@ export async function createAppointment(data: {
       // Create invoice for the appointment
       try {
         console.log("💳 Creating invoice for appointment:", appointment.id);
-        await (prisma as any).invoice.create({
+        await prisma.invoice.create({
           data: {
             clientId: appointment.clientId,
+            tenantId: tenantId,
             appointmentId: appointment.id,
             amount: data.rate,
             status: "UNPAID",
             description: `Consultation - ${format(new Date(appointment.startTime), "PPP", { locale: fr })}`,
             dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+            emailStatus: client.sendInvoiceAutomatically
+              ? "SCHEDULED"
+              : "NOT_SENT",
           },
         });
         console.log("✅ Created invoice for appointment:", appointment.id);
@@ -568,11 +582,10 @@ export async function updateAppointment(
 
   try {
     if (editMode === "series") {
+      const tenantId = await getTenantId();
       // First, get the appointment to check if it's recurring
-      const originalAppointment: any = await (
-        prisma as any
-      ).appointment.findUnique({
-        where: { id },
+      const originalAppointment: any = await prisma.appointment.findUnique({
+        where: { id, tenantId },
         include: { client: true, notes: true, invoice: true },
       });
 
@@ -592,14 +605,13 @@ export async function updateAppointment(
           );
 
           // Get all appointments in the series
-          const seriesAppointments = await (prisma as any).appointment.findMany(
-            {
-              where: {
-                recurrentId: originalAppointment.recurrentId,
-                client: { deleted: false },
-              },
-            }
-          );
+          const seriesAppointments = await prisma.appointment.findMany({
+            where: {
+              recurrentId: originalAppointment.recurrentId,
+              client: { deleted: false },
+              tenantId,
+            },
+          });
 
           console.log(
             `📊 Found ${seriesAppointments.length} appointments in series`
@@ -634,8 +646,8 @@ export async function updateAppointment(
             }
 
             // Update the appointment with new dates
-            await (prisma as any).appointment.update({
-              where: { id: appointment.id },
+            await prisma.appointment.update({
+              where: { id: appointment.id, tenantId },
               data: {
                 startTime: newStart,
                 endTime: newEnd,
@@ -656,9 +668,10 @@ export async function updateAppointment(
         } else {
           // Regular series update without time or day differences
           const { ...updateData } = data;
-          const updateResult = await (prisma as any).appointment.updateMany({
+          const updateResult = await prisma.appointment.updateMany({
             where: {
               recurrentId: originalAppointment.recurrentId,
+              tenantId,
             },
             data: updateData,
           });
@@ -667,19 +680,17 @@ export async function updateAppointment(
         }
 
         // Return the original appointment with updated data
-        const updatedAppointment = await (prisma as any).appointment.findUnique(
-          {
-            where: { id },
-            include: { client: true, notes: true, invoice: true },
-          }
-        );
+        const updatedAppointment = await prisma.appointment.findUnique({
+          where: { id, tenantId },
+          include: { client: true, notes: true, invoice: true },
+        });
 
         // If appointment is online and times changed, regenerate Jitsi tokens and notify client
         try {
           if (updatedAppointment.format === "ONLINE") {
             // regenerate tokens for the updated appointment
-            const client = await (prisma as any).client.findUnique({
-              where: { id: updatedAppointment.clientId },
+            const client = await prisma.client.findUnique({
+              where: { id: updatedAppointment.clientId, tenantId },
               select: {
                 firstName: true,
                 lastName: true,
@@ -697,8 +708,8 @@ export async function updateAppointment(
                 new Date(updatedAppointment.endTime)
               );
 
-              await (prisma as any).appointment.update({
-                where: { id: updatedAppointment.id },
+              await prisma.appointment.update({
+                where: { id: updatedAppointment.id, tenantId },
                 data: { hostJwt: tokens.hostJwt, clientJwt: tokens.clientJwt },
               });
 
@@ -721,11 +732,10 @@ export async function updateAppointment(
                 );
 
                 // Update scheduled emails for all appointments in the series
-                const seriesAppointments = await (
-                  prisma as any
-                ).appointment.findMany({
+                const seriesAppointments = await prisma.appointment.findMany({
                   where: {
                     recurrentId: originalAppointment.recurrentId,
+                    tenantId: tenantId,
                     client: { deleted: false },
                   },
                   select: { id: true, startTime: true, endTime: true },
@@ -785,17 +795,16 @@ export async function updateAppointment(
 
     // Update single appointment (default behavior)
     console.log("📝 Updating single appointment");
-
+    const tenantId = await getTenantId();
     // Store original appointment data before update
-    const originalAppointmentForSingle: any = await (
-      prisma as any
-    ).appointment.findUnique({
-      where: { id },
-      include: { client: true },
-    });
+    const originalAppointmentForSingle: any =
+      await prisma.appointment.findUnique({
+        where: { id, tenantId },
+        include: { client: true },
+      });
 
-    const appointment: any = await (prisma as any).appointment.update({
-      where: { id },
+    const appointment: any = await prisma.appointment.update({
+      where: { id, tenantId },
       data,
       include: {
         client: true,
@@ -826,8 +835,8 @@ export async function updateAppointment(
             new Date(appointment.endTime)
           );
 
-          await (prisma as any).appointment.update({
-            where: { id: appointment.id },
+          await prisma.appointment.update({
+            where: { id: appointment.id, tenantId: tenantId },
             data: { hostJwt: tokens.hostJwt, clientJwt: tokens.clientJwt },
           });
 
@@ -908,10 +917,11 @@ export async function deleteAppointment(
   console.log("🗑️ deleteAppointment called with:", { id, deleteMode });
 
   try {
+    const tenantId = await getTenantId();
     if (deleteMode === "series") {
       // First, get the appointment to check if it's recurring
-      const appointment: any = await (prisma as any).appointment.findUnique({
-        where: { id },
+      const appointment: any = await prisma.appointment.findUnique({
+        where: { id, tenantId },
       });
 
       if (!appointment) {
@@ -925,25 +935,26 @@ export async function deleteAppointment(
         );
 
         // Delete all appointments in the series
-        const deleteResult = await (prisma as any).appointment.deleteMany({
+        const deleteResult = await prisma.appointment.deleteMany({
           where: {
             recurrentId: appointment.recurrentId,
+            tenantId,
           },
         });
 
         console.log("📊 Deleted appointments count:", deleteResult.count);
       } else {
         // Not a recurring appointment, just delete the single one
-        await (prisma.appointment as any).delete({
-          where: { id },
+        await prisma.appointment.delete({
+          where: { id, tenantId },
         });
         console.log("✅ Deleted single appointment");
       }
     } else {
       // Single appointment deletion
       console.log("🗑️ Deleting single appointment");
-      await (prisma.appointment as any).delete({
-        where: { id },
+      await prisma.appointment.delete({
+        where: { id, tenantId },
       });
       console.log("✅ Deleted single appointment");
     }
@@ -962,17 +973,82 @@ export async function deleteAppointment(
   }
 }
 
+export async function cancelAppointment(appointmentId: string): Promise<void> {
+  try {
+    console.log("📧 Cancelling appointment and sending email:", appointmentId);
+    const tenantId = await getTenantId();
+    // Fetch the appointment with client details
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId, tenantId },
+      include: {
+        client: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!appointment) {
+      throw new Error("Appointment not found");
+    }
+
+    // Update appointment status to CANCELLED
+    await prisma.appointment.update({
+      where: { id: appointmentId, tenantId },
+      data: { status: "CANCELLED" },
+    });
+
+    // Cancel any scheduled emails for this appointment
+    try {
+      await EmailScheduler.cancelAppointmentEmails(appointmentId);
+    } catch (emailSchedulerError) {
+      console.error(
+        "❌ Error cancelling scheduled emails:",
+        emailSchedulerError
+      );
+      // Don't fail the cancellation if email scheduler fails
+    }
+
+    // Send cancellation email
+    await EmailService.sendCancellationEmail({
+      id: appointment.id,
+      startTime: new Date(appointment.startTime),
+      endTime: new Date(appointment.endTime),
+      format: appointment.format,
+      client: {
+        firstName: appointment.client.firstName,
+        lastName: appointment.client.lastName,
+        email: appointment.client.email,
+      },
+    });
+
+    console.log("✅ Appointment cancelled and email sent");
+  } catch (error) {
+    console.error("❌ Error cancelling appointment:", error);
+    throw new Error(
+      `Failed to cancel appointment: ${
+        (error as any)?.message || "Unknown error"
+      }`
+    );
+  }
+}
+
 export async function getUpcomingOnlineAppointments(): Promise<IEvent[]> {
   try {
+    const tenantId = await getTenantId();
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
-    const appointments: any[] = await (prisma as any).appointment.findMany({
+    const appointments: any[] = await prisma.appointment.findMany({
       where: {
         format: "ONLINE",
         startTime: {
           gte: oneDayAgo,
         },
         client: { deleted: false },
+        tenantId,
       },
       include: {
         client: true,
@@ -1029,8 +1105,9 @@ export async function updateAppointmentStatusAndPayment(
   }
 ): Promise<IEvent> {
   try {
-    const appointment: any = await (prisma as any).appointment.update({
-      where: { id },
+    const tenantId = await getTenantId();
+    const appointment: any = await prisma.appointment.update({
+      where: { id, tenantId },
       data,
       include: {
         client: true,

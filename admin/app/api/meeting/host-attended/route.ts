@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getTenantId } from "@/lib/actions/tenant";
 
 export async function POST(request: NextRequest) {
   try {
     const { appointmentId, jwt: jwtToken } = await request.json();
-
+    const tenantId = await getTenantId();
     if (!appointmentId || !jwtToken) {
       return NextResponse.json(
         { error: "Appointment ID and JWT token are required" },
@@ -13,8 +14,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the appointment
-    const appointment = await (prisma as any).appointment.findUnique({
-      where: { id: appointmentId },
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId, tenantId },
     });
 
     if (!appointment) {
@@ -61,8 +62,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Mark host as attended
-    const updatedAppointment = await (prisma as any).appointment.update({
-      where: { id: appointmentId },
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id: appointmentId, tenantId: tenantId },
       data: {
         hostAttended: true,
         // If client has already attended, set status to ATTENDED

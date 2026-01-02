@@ -21,7 +21,7 @@ async function processEmails(request: NextRequest) {
 
     const now = new Date();
     // Get emails that should be sent now (with 5-minute buffer)
-    const emailsToSend = await (prisma.emailSchedule as any).findMany({
+    const emailsToSend = await prisma.emailSchedule.findMany({
       where: {
         status: EmailStatus.PENDING,
         scheduledFor: {
@@ -46,10 +46,14 @@ async function processEmails(request: NextRequest) {
     for (const emailSchedule of emailsToSend) {
       try {
         console.log(
-          `📤 Sending ${emailSchedule.emailType} email to ${emailSchedule.recipientEmail}`
+          `📤 Sending ${emailSchedule.emailType} email to ${emailSchedule.recipientEmail} for tenant ${emailSchedule.tenantId}`
         );
 
-        await EmailService.sendScheduledEmail(emailSchedule);
+        // Pass tenantId to email service for proper tenant context in cron job
+        await EmailService.sendScheduledEmail(
+          emailSchedule,
+          emailSchedule.tenantId
+        );
 
         // Mark as sent
         await prisma.emailSchedule.update({

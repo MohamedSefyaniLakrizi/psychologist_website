@@ -1,7 +1,10 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { prisma } from "./prisma";
+import bcrypt from "bcryptjs";
 
-// Extend the built-in session types
+// Extend the built-in session types to include tenantId and tenant metadata
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
@@ -9,6 +12,12 @@ declare module "next-auth" {
     error?: string;
     user: {
       id: string;
+      tenantId: string;
+      role: string;
+      // Tenant metadata available in session
+      tenantOfficeName?: string;
+      tenantPhone?: string;
+      tenantAddress?: string;
       name?: string | null;
       email?: string | null;
       image?: string | null;
@@ -23,6 +32,12 @@ declare module "next-auth/jwt" {
     expiresAt?: number;
     error?: string;
     sub: string;
+    tenantId?: string;
+    role?: string;
+    // Tenant metadata stored in token
+    tenantOfficeName?: string;
+    tenantPhone?: string;
+    tenantAddress?: string;
   }
 }
 
@@ -40,32 +55,175 @@ export const authOptions: NextAuthOptions = {
         },
       },
     }),
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Email and password required");
+        }
+
+        // Find user by email
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+          include: {
+            tenant: {
+              select: {
+                id: true,
+                officeName: true,
+                phoneNumber: true,
+                address: true,
+                paymentStatus: true,
+              },
+            },
+          },
+        });
+
+        if (!user) {
+          throw new Error("Invalid credentials");
+        }
+
+        // Check if user is active
+        if (!user.isActive) {
+          throw new Error("Account is inactive");
+        }
+
+        // Check if tenant payment is valid
+        if (
+          user.tenant.paymentStatus === "SUSPENDED" ||
+          user.tenant.paymentStatus === "CANCELLED"
+        ) {
+          throw new Error("Account subscription is not active");
+        }
+
+        // Verify password if it exists (credentials login)
+        if (user.password) {
+          const isValid = await bcrypt.compare(
+            credentials.password,
+            user.password
+          );
+          if (!isValid) {
+            throw new Error("Invalid credentials");
+          }
+        }
+
+        // Update last login
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        });
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          tenantId: user.tenantId,
+          role: user.role,
+          tenantOfficeName: user.tenant?.officeName,
+          tenantPhone: user.tenant?.phoneNumber,
+          tenantAddress: user.tenant?.address,
+        };
+      },
+    }),
   ],
   session: {
     strategy: "jwt",
     maxAge: 10 * 365 * 24 * 60 * 60, // 10 years in seconds
   },
-  // Remove custom cookie configuration to use NextAuth defaults
-  // This prevents cookie name mismatches between client and server
   callbacks: {
-    async signIn({ user }) {
-      // Only allow the authorized email to sign in
-      const authorizedEmail = process.env.AUTHORIZED_GOOGLE_EMAIL;
+    async signIn({ user, account, profile }) {
+      // For Google OAuth sign-in
+      if (account?.provider === "google") {
+        // Check if user exists in database
+        const existingUser = await prisma.user.findUnique({
+          where: { email: user.email! },
+          include: {
+            tenant: {
+              select: {
+                officeName: true,
+                phoneNumber: true,
+                address: true,
+                paymentStatus: true,
+              },
+            },
+          },
+        });
 
-      console.log(
-        `Sign-in attempt from: ${user.email}, authorized: ${authorizedEmail}`
-      );
+        if (!existingUser) {
+          // For new Google users, you might want to:
+          // 1. Auto-create a tenant and user, OR
+          // 2. Redirect to a registration page to complete tenant setup
+          // For now, we'll reject new Google sign-ins
+          console.log(`New Google sign-in attempt from: ${user.email}`);
+          return `/login?error=no_account&email=${encodeURIComponent(user.email || "")}`;
+        }
 
-      if (user.email === authorizedEmail) {
-        return true;
-      } else {
-        console.log(`Unauthorized sign-in attempt from: ${user.email}`);
-        // Return error URL to show user the error message
-        return `/login?error=unauthorized&email=${encodeURIComponent(user.email || "")}`;
+        // Check if account is active
+        if (!existingUser.isActive) {
+          return `/login?error=inactive&email=${encodeURIComponent(user.email || "")}`;
+        }
+
+        // Check tenant payment status
+        if (
+          existingUser.tenant.paymentStatus === "SUSPENDED" ||
+          existingUser.tenant.paymentStatus === "CANCELLED"
+        ) {
+          return `/login?error=subscription&email=${encodeURIComponent(user.email || "")}`;
+        }
+
+        // Update last login
+        await prisma.user.update({
+          where: { id: existingUser.id },
+          data: { lastLoginAt: new Date() },
+        });
+
+        // Store user data for JWT callback (cast to any for custom props)
+        (user as any).id = existingUser.id;
+        (user as any).tenantId = existingUser.tenantId;
+        (user as any).role = existingUser.role;
+        (user as any).tenantOfficeName = existingUser.tenant?.officeName;
+        (user as any).tenantPhone = existingUser.tenant?.phoneNumber;
+        (user as any).tenantAddress = existingUser.tenant?.address;
       }
+
+      return true;
     },
-    async jwt({ token, account }) {
-      // Persist the OAuth access_token and refresh_token to the token right after signin
+    async jwt({ token, account, user }) {
+      // Persist tenant and role info after signin
+      if (user) {
+        token.tenantId = (user as any).tenantId;
+        token.role = (user as any).role;
+        token.tenantOfficeName = (user as any).tenantOfficeName;
+        token.tenantPhone = (user as any).tenantPhone;
+        token.tenantAddress = (user as any).tenantAddress;
+      }
+
+      // If tenantId is not in token yet, fetch it from database (one-time lookup)
+      if (!token.tenantId && token.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: token.email },
+          select: {
+            tenantId: true,
+            role: true,
+            tenant: {
+              select: { officeName: true, phoneNumber: true, address: true },
+            },
+          },
+        });
+
+        if (dbUser) {
+          token.tenantId = dbUser.tenantId;
+          token.role = dbUser.role;
+          token.tenantOfficeName = dbUser.tenant?.officeName;
+          token.tenantPhone = dbUser.tenant?.phoneNumber;
+          token.tenantAddress = dbUser.tenant?.address;
+        }
+      }
+
+      // Persist the OAuth access_token and refresh_token
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -77,8 +235,8 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
 
-      // Access token has expired, try to update it
-      if (token.refreshToken) {
+      // Access token has expired, try to update it (for Google OAuth)
+      if (token.refreshToken && account?.provider === "google") {
         try {
           const response = await fetch("https://oauth2.googleapis.com/token", {
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -103,7 +261,6 @@ export const authOptions: NextAuthOptions = {
           };
         } catch (error) {
           console.error("Error refreshing access token", error);
-          // Return an error token, which will trigger a redirect to the sign-in page
           return { ...token, error: "RefreshAccessTokenError" };
         }
       }
@@ -116,9 +273,15 @@ export const authOptions: NextAuthOptions = {
       session.refreshToken = token.refreshToken;
       session.error = token.error;
 
-      // Add user ID to session - CRITICAL for data isolation
-      if (token.sub && session.user) {
+      // Add critical tenant isolation data
+      if (session.user) {
         session.user.id = token.sub;
+        session.user.tenantId = token.tenantId!;
+        session.user.role = token.role!;
+        // Tenant metadata
+        (session.user as any).tenantOfficeName = token.tenantOfficeName;
+        (session.user as any).tenantPhone = token.tenantPhone;
+        (session.user as any).tenantAddress = token.tenantAddress;
       }
 
       return session;
@@ -129,5 +292,5 @@ export const authOptions: NextAuthOptions = {
     error: "/login",
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === "development", // Only enable debug in development
+  debug: process.env.NODE_ENV === "development",
 };

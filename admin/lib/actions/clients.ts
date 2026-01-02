@@ -5,6 +5,37 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getTenantId } from "./tenant";
+
+export async function getClient(clientId: string) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  try {
+    const tenantId = await getTenantId();
+    // Get confirmed client that is not deleted
+    const client = await prisma.client.findUnique({
+      where: {
+        id: clientId,
+        confirmed: true,
+        deleted: false, // Exclude soft-deleted clients
+        tenantId,
+      },
+    });
+
+    if (!client) {
+      return { success: false, error: "Client non trouvé" };
+    }
+
+    return { success: true, data: client };
+  } catch (error) {
+    console.error("Error fetching client:", error);
+    return { success: false, error: "Erreur interne du serveur" };
+  }
+}
 
 export async function getClients() {
   const session = await getServerSession(authOptions);
@@ -14,11 +45,13 @@ export async function getClients() {
   }
 
   try {
+    const tenantId = await getTenantId();
     // Single-user app: get all confirmed clients that are not deleted
     const clients = await prisma.client.findMany({
       where: {
         confirmed: true,
         deleted: false, // Exclude soft-deleted clients
+        tenantId,
       },
       orderBy: {
         createdAt: "desc",
@@ -32,6 +65,7 @@ export async function getClients() {
   }
 }
 export async function createClient(formData: FormData) {
+  const tenantId = await getTenantId();
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -58,7 +92,7 @@ export async function createClient(formData: FormData) {
   try {
     // Check if client exists (including deleted ones)
     const existingClient = await prisma.client.findUnique({
-      where: { email },
+      where: { email, tenantId },
     });
 
     let client;
@@ -66,7 +100,7 @@ export async function createClient(formData: FormData) {
     if (existingClient) {
       // Client exists - restore if deleted, otherwise update
       client = await prisma.client.update({
-        where: { id: existingClient.id },
+        where: { id: existingClient.id, tenantId },
         data: {
           firstName,
           lastName,
@@ -90,6 +124,7 @@ export async function createClient(formData: FormData) {
           sendInvoiceAutomatically,
           defaultRate,
           confirmed: true,
+          tenantId,
         },
       });
     }
@@ -119,6 +154,7 @@ export async function createClient(formData: FormData) {
 
 export async function updateClient(clientId: string, formData: FormData) {
   const session = await getServerSession(authOptions);
+  const tenantId = await getTenantId();
 
   if (!session) {
     redirect("/login");
@@ -145,6 +181,7 @@ export async function updateClient(clientId: string, formData: FormData) {
     const client = await prisma.client.update({
       where: {
         id: clientId,
+        tenantId,
       },
       data: {
         firstName,
@@ -180,6 +217,7 @@ export async function updateClient(clientId: string, formData: FormData) {
 }
 
 export async function deleteClient(clientId: string) {
+  const tenantId = await getTenantId();
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -191,12 +229,14 @@ export async function deleteClient(clientId: string) {
     const appointmentCount = await prisma.appointment.count({
       where: {
         clientId,
+        tenantId,
       },
     });
 
     const invoiceCount = await prisma.invoice.count({
       where: {
         clientId,
+        tenantId,
       },
     });
 
@@ -205,6 +245,7 @@ export async function deleteClient(clientId: string) {
       await prisma.client.delete({
         where: {
           id: clientId,
+          tenantId,
         },
       });
       revalidatePath("/clients");
@@ -215,6 +256,7 @@ export async function deleteClient(clientId: string) {
     await prisma.client.update({
       where: {
         id: clientId,
+        tenantId,
       },
       data: {
         deleted: true,

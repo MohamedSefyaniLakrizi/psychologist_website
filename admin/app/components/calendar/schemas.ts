@@ -35,6 +35,9 @@ export const appointmentFormSchema = z
     format: z.enum(["ONLINE", "FACE_TO_FACE"], {
       message: "Le format est requis",
     }),
+    status: z
+      .enum(["NOT_YET_ATTENDED", "ATTENDED", "ABSENT", "CANCELLED"])
+      .optional(),
     isRecurring: z.boolean(),
     recurringType: z.enum(["WEEKLY", "BIWEEKLY", "MONTHLY"]).optional(),
     recurringPeriod: z.enum(["1M", "3M", "6M", "1Y", "2Y"]).optional(),
